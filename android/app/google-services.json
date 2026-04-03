@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "106277281333",
+    "firebase_url": "https://watering-6ff52-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "watering-6ff52",
+    "storage_bucket": "watering-6ff52.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:106277281333:android:02691d376a6b2fa71e9b7c",
+        "android_client_info": {
+          "package_name": "com.example.watering_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCnLd32cGr2rFsejA0nwWHwGuhFAe4BRYI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
