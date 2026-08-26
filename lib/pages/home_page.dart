@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'calendar_page.dart';
 import 'graph_page.dart';
+import 'notification_history_page.dart';
 
 // 🔥 [เพิ่ม] สำหรับกลับไปหน้า login
 import 'login_page.dart';
@@ -21,6 +22,106 @@ class HomePage extends StatelessWidget {
         title: const Text("🌱 หน้าหลัก"),
 
         actions: [
+          IconButton(
+            icon: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('ESP32')
+                  .where('uid', isEqualTo: uid)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                int count = 0;
+
+                if (snapshot.hasData) {
+                  for (var doc in snapshot.data!.docs) {
+                    final data = doc.data() as Map<String, dynamic>;
+
+                    double moisture =
+                        (data['Moisture'] ?? 0).toDouble();
+
+                    double automois =
+                        (data['Automois'] ?? 0).toDouble();
+
+                    if (moisture > automois) {
+                      count++;
+                    }
+                  }
+                }
+
+                return Stack(
+                  children: [
+                    const Icon(Icons.notifications),
+
+                    if (count > 0)
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
+                          constraints: const BoxConstraints(
+                            minWidth: 18,
+                            minHeight: 18,
+                          ),
+                          child: Text(
+                            '$count',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+            onPressed: () async {
+              final snapshot = await FirebaseFirestore.instance
+                  .collection('ESP32')
+                  .where('uid', isEqualTo: uid)
+                  .get();
+
+              List<String> alerts = [];
+
+              for (var doc in snapshot.docs) {
+                final data = doc.data();
+
+                double moisture = (data['Moisture'] ?? 0).toDouble();
+
+                double automois = (data['Automois'] ?? 0).toDouble();
+
+                if (moisture > automois) {
+                  alerts.add(
+                    "⚠️ ${doc.id}\nความชื้น: $moisture\nค่าที่กำหนด: $automois",
+                  );
+                }
+              }
+
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text("แจ้งเตือน"),
+                  content: SingleChildScrollView(
+                    child: Text(
+                      alerts.isEmpty
+                          ? "✅ ไม่มีการแจ้งเตือน"
+                          : alerts.join("\n\n"),
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("ปิด"),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
           StreamBuilder<DocumentSnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('users')
@@ -50,14 +151,17 @@ class HomePage extends StatelessWidget {
               return Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Flexible(
+                    SizedBox(
+                      width: 80,
                       child: Text(
                         name,
                         style: const TextStyle(fontSize: 14),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
+
                     const SizedBox(width: 8),
                     CircleAvatar(
                       radius: 16,
@@ -140,11 +244,17 @@ class HomePage extends StatelessWidget {
               final nanoId = doc.id;
 
               double currentTarget = (data['Automois'] ?? 20).toDouble();
+              final moisture = (data['Moisture'] ?? 0).toDouble();
+              final automois = (data['Automois'] ?? 20).toDouble();
 
+              final isAlert = moisture > automois;
               TextEditingController controller =
                   TextEditingController(text: currentTarget.toString());
 
               return Card(
+                color: isAlert
+                    ? Colors.red.shade100
+                    : Colors.green.shade50,
                 margin: const EdgeInsets.all(12),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -160,6 +270,17 @@ class HomePage extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Text("Moisture: ${data['Moisture']}"),
+
+                      Text(
+                        isAlert
+                            ? "⚠️ สถานะ : ความชื้นสูงกว่าค่าที่กำหนด"
+                            : "✅ สถานะ : ปกติ",
+                        style: TextStyle(
+                          color: isAlert ? Colors.red : Colors.green,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+
                       Text("Time: ${data['Time']}"),
                       Text("Auto: ${data['Auto']}"),
                       Text("Valve: ${data['Valve']}"),
@@ -267,6 +388,22 @@ class HomePage extends StatelessWidget {
                               );
                             },
                             child: const Text("📈 Graph"),
+                          ),
+                          const SizedBox(width: 10),
+
+                          ElevatedButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      NotificationHistoryPage(
+                                    nanoId: nanoId,
+                                  ),
+                                ),
+                              );
+                            },
+                            child: const Text("🔔 History"),
                           ),
                         ],
                       ),
