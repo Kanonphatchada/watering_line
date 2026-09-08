@@ -58,11 +58,15 @@ class _GraphPageState extends State<GraphPage> {
       index++;
     }
 
-    // 🔥 ป้องกัน crash ถ้าไม่มีข้อมูล
-    if (spots.isNotEmpty) {
-      minY = spots.map((e) => e.y).reduce((a, b) => a < b ? a : b) - 5;
-      maxY = spots.map((e) => e.y).reduce((a, b) => a > b ? a : b) + 5;
-    }
+    // 🔥 ป้องกัน crash ถ้าไม่มีข้อมูล และรวมเส้นค่าที่กำหนดไว้ในช่วงแกน Y ด้วย
+    // เพื่อไม่ให้เส้นประหลุดจากพื้นที่กราฟ
+    final values = [...spots.map((e) => e.y), targetMoisture];
+    final lowest = values.reduce((a, b) => a < b ? a : b);
+    final highest = values.reduce((a, b) => a > b ? a : b);
+
+    // ความชื้นไม่ควรติดลบ เลยยึดขอบล่างไว้ที่ 0 เป็นอย่างน้อย
+    minY = lowest - 5 < 0 ? 0 : lowest - 5;
+    maxY = highest + 5;
 
     setState(() {
       isLoading = false;
