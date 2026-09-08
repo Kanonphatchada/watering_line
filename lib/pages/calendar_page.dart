@@ -74,57 +74,128 @@ class _CalendarPageState extends State<CalendarPage> {
       ),
       body: Column(
         children: [
-          Text("🎯 ตั้งค่าความชื้น: $targetMoisture"),
-          Expanded(
-            child: TableCalendar(
-              firstDay: DateTime.now().subtract(const Duration(days: 30)),
-              lastDay: DateTime.now(),
-              focusedDay: DateTime.now(),
-
-              // 🔥 กดวันดู detail
-              onDaySelected: (selectedDay, focusedDay) {
-                final d = DateTime(
-                    selectedDay.year, selectedDay.month, selectedDay.day);
-
-                final moisture = moisturePerDay[d];
-
-                showDialog(
-                  context: context,
-                  builder: (_) => AlertDialog(
-                    title: Text("วันที่ ${selectedDay.day}"),
-                    content: Text(
-                      moisture != null ? "💧 $moisture" : "ไม่มีข้อมูล",
-                    ),
-                  ),
-                );
-              },
-
-              calendarBuilders: CalendarBuilders(
-                defaultBuilder: (context, day, focusedDay) {
-                  final d = DateTime(day.year, day.month, day.day);
-
-                  if (moisturePerDay.containsKey(d)) {
-                    final moisture = moisturePerDay[d]!;
-
-                    return Container(
-                      margin: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: getColor(moisture),
-                        shape: BoxShape.circle,
+          Card(
+            margin: const EdgeInsets.all(12),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.flag, color: Color(0xFF4CAF50)),
+                      const SizedBox(width: 8),
+                      Text(
+                        "ตั้งค่าความชื้น: $targetMoisture",
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                      child: Center(
-                        child: Text('${day.day}'),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  const Wrap(
+                    spacing: 16,
+                    runSpacing: 6,
+                    children: [
+                      _LegendDot(
+                          color: Colors.yellow, label: "ต่ำกว่าค่าที่กำหนด"),
+                      _LegendDot(
+                          color: Colors.green, label: "ใกล้เคียงค่าที่กำหนด"),
+                      _LegendDot(
+                          color: Colors.red, label: "สูงกว่าค่าที่กำหนด"),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Expanded(
+            child: Card(
+              margin: const EdgeInsets.symmetric(horizontal: 12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: TableCalendar(
+                  firstDay: DateTime.now().subtract(const Duration(days: 30)),
+                  lastDay: DateTime.now(),
+                  focusedDay: DateTime.now(),
+
+                  // 🔥 กดวันดู detail
+                  onDaySelected: (selectedDay, focusedDay) {
+                    final d = DateTime(
+                        selectedDay.year, selectedDay.month, selectedDay.day);
+
+                    final moisture = moisturePerDay[d];
+
+                    showDialog(
+                      context: context,
+                      builder: (_) => AlertDialog(
+                        title: Text("วันที่ ${selectedDay.day}"),
+                        content: Text(
+                          moisture != null ? "💧 $moisture" : "ไม่มีข้อมูล",
+                        ),
                       ),
                     );
-                  }
+                  },
 
-                  return null;
-                },
+                  calendarBuilders: CalendarBuilders(
+                    defaultBuilder: (context, day, focusedDay) {
+                      final d = DateTime(day.year, day.month, day.day);
+
+                      if (moisturePerDay.containsKey(d)) {
+                        final moisture = moisturePerDay[d]!;
+
+                        return Container(
+                          margin: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: getColor(moisture),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Text('${day.day}'),
+                          ),
+                        );
+                      }
+
+                      return null;
+                    },
+                  ),
+                ),
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _LegendDot extends StatelessWidget {
+  final Color color;
+  final String label;
+
+  const _LegendDot({required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Theme.of(context).textTheme.bodySmall?.color,
+          ),
+        ),
+      ],
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:shimmer/shimmer.dart';
 
 class GraphPage extends StatefulWidget {
   final String nanoId;
@@ -17,6 +18,7 @@ class _GraphPageState extends State<GraphPage> {
 
   double minY = 0;
   double maxY = 100;
+  bool isLoading = true;
 
   @override
   void initState() {
@@ -36,12 +38,13 @@ class _GraphPageState extends State<GraphPage> {
       targetMoisture = (data['Automois'] as num).toDouble();
     }
 
-    // 🔥 โหลด logs
+    // 🔥 โหลด logs (แสดงแค่ 30 รายการล่าสุด ไม่ให้กราฟรกเกินไป)
     final logs = await FirebaseFirestore.instance
         .collection('ESP32')
         .doc(widget.nanoId)
         .collection('Logs')
         .orderBy('timestamp')
+        .limitToLast(30)
         .get();
 
     int index = 0;
@@ -61,7 +64,9 @@ class _GraphPageState extends State<GraphPage> {
       maxY = spots.map((e) => e.y).reduce((a, b) => a > b ? a : b) + 5;
     }
 
-    setState(() {});
+    setState(() {
+      isLoading = false;
+    });
   }
 
   @override
@@ -70,59 +75,174 @@ class _GraphPageState extends State<GraphPage> {
       appBar: AppBar(
         title: Text("📈 ${widget.nanoId}"),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
+      body: isLoading ? const _GraphSkeleton() : _buildContent(),
+    );
+  }
+
+  Widget _buildContent() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          Card(
+            margin: EdgeInsets.zero,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.flag, color: Color(0xFF4CAF50)),
+                      const SizedBox(width: 8),
+                      Text(
+                        "ตั้งค่าความชื้น : $targetMoisture",
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  const Wrap(
+                    spacing: 16,
+                    runSpacing: 6,
+                    children: [
+                      _LegendSwatch(color: Colors.blue, label: "ค่าที่กำหนด"),
+                      _LegendSwatch(color: Colors.green, label: "ปกติ"),
+                      _LegendSwatch(
+                          color: Colors.red, label: "เกินค่าที่กำหนด"),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 16, 16, 8),
+                child: spots.isEmpty
+                    ? const Center(child: Text("ยังไม่มีข้อมูล"))
+                    : BarChart(
+                        BarChartData(
+                          minY: minY,
+                          maxY: maxY,
+                          gridData: const FlGridData(show: true),
+                          titlesData: FlTitlesData(
+                            leftTitles: AxisTitles(
+                              sideTitles: SideTitles(showTitles: true),
+                            ),
+                            bottomTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false),
+                            ),
+                            topTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false),
+                            ),
+                            rightTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false),
+                            ),
+                          ),
+                          extraLinesData: ExtraLinesData(
+                            horizontalLines: [
+                              HorizontalLine(
+                                y: targetMoisture,
+                                color: Colors.blue,
+                                strokeWidth: 2,
+                                dashArray: [8, 4],
+                              ),
+                            ],
+                          ),
+                          barGroups: [
+                            for (final spot in spots)
+                              BarChartGroupData(
+                                x: spot.x.toInt(),
+                                barRods: [
+                                  BarChartRodData(
+                                    toY: spot.y,
+                                    width: spots.length > 20 ? 6 : 12,
+                                    color: spot.y > targetMoisture
+                                        ? Colors.red
+                                        : Colors.green,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                ],
+                              ),
+                          ],
+                        ),
+                      ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LegendSwatch extends StatelessWidget {
+  final Color color;
+  final String label;
+
+  const _LegendSwatch({required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(3),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Theme.of(context).textTheme.bodySmall?.color,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _GraphSkeleton extends StatelessWidget {
+  const _GraphSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final base = isDark ? Colors.grey.shade800 : Colors.grey.shade300;
+    final highlight = isDark ? Colors.grey.shade700 : Colors.grey.shade100;
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Shimmer.fromColors(
+        baseColor: base,
+        highlightColor: highlight,
         child: Column(
           children: [
-            Text("🎯 ตั้งค่าความชื้น : $targetMoisture"),
-
-            const SizedBox(height: 20),
-
+            Container(
+              height: 80,
+              decoration: BoxDecoration(
+                color: base,
+                borderRadius: BorderRadius.circular(18),
+              ),
+            ),
+            const SizedBox(height: 16),
             Expanded(
-              child: LineChart(
-                LineChartData(
-                  minY: minY,
-                  maxY: maxY,
-
-                  gridData: FlGridData(show: true),
-
-                  titlesData: FlTitlesData(
-                    leftTitles: AxisTitles(
-                      sideTitles: SideTitles(showTitles: true),
-                    ),
-                    bottomTitles: AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                  ),
-
-                  lineBarsData: [
-                    // 🔵 เส้น target
-                    LineChartBarData(
-                      spots: [
-                        FlSpot(0, targetMoisture),
-                        FlSpot(spots.length.toDouble(), targetMoisture),
-                      ],
-                      isCurved: false,
-                      color: Colors.blue,
-                      barWidth: 2,
-                      dotData: FlDotData(show: false),
-                    ),
-
-                    // 📈 เส้น moisture จริง
-                    LineChartBarData(
-                      spots: spots,
-                      isCurved: true,
-                      barWidth: 3,
-                      dotData: FlDotData(show: false),
-                      gradient: const LinearGradient(
-                        colors: [
-                          Colors.green,
-                          Colors.orange,
-                          Colors.red,
-                        ],
-                      ),
-                    ),
-                  ],
+              child: Container(
+                decoration: BoxDecoration(
+                  color: base,
+                  borderRadius: BorderRadius.circular(18),
                 ),
               ),
             ),

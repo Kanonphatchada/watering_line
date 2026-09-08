@@ -56,9 +56,8 @@ class _AddDevicePageState extends State<AddDevicePage> {
     final secret = secretController.text.trim();
     final uid = FirebaseAuth.instance.currentUser!.uid;
 
-    final docRef = FirebaseFirestore.instance
-        .collection('device_registry')
-        .doc(deviceId);
+    final docRef =
+        FirebaseFirestore.instance.collection('device_registry').doc(deviceId);
 
     print("STEP 1: start");
 
@@ -142,26 +141,81 @@ class _AddDevicePageState extends State<AddDevicePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("เพิ่มอุปกรณ์")),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            TextField(
-              controller: deviceIdController,
-              decoration: const InputDecoration(labelText: "Device ID"),
+      appBar: AppBar(title: const Text("🌱 เพิ่มอุปกรณ์")),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Container(
+            width: 360,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-            TextField(
-              controller: secretController,
-              decoration: const InputDecoration(labelText: "Secret"),
-              obscureText: true,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Icon(Icons.sensors, size: 40, color: Color(0xFF4CAF50)),
+                const SizedBox(height: 12),
+                const Text(
+                  "เชื่อมต่ออุปกรณ์ของคุณ",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  "กรอก Device ID และ Secret ที่ได้รับมา",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Theme.of(context).textTheme.bodySmall?.color,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                TextField(
+                  controller: deviceIdController,
+                  decoration: const InputDecoration(
+                    labelText: "Device ID",
+                    prefixIcon: Icon(Icons.badge_outlined),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: secretController,
+                  decoration: const InputDecoration(
+                    labelText: "Secret",
+                    prefixIcon: Icon(Icons.lock_outline),
+                  ),
+                  obscureText: true,
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  height: 48,
+                  child: ElevatedButton(
+                    onPressed: isLoading ? null : claimDevice,
+                    child: isLoading
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text("เชื่อมต่ออุปกรณ์"),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: claimDevice,
-              child: const Text("เชื่อมต่ออุปกรณ์"),
-            )
-          ],
+          ),
         ),
       ),
     );

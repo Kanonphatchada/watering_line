@@ -46,7 +46,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '106277281333',
     projectId: 'watering-6ff52',
     authDomain: 'watering-6ff52.firebaseapp.com',
-    databaseURL: 'https://watering-6ff52-default-rtdb.asia-southeast1.firebasedatabase.app',
+    databaseURL:
+        'https://watering-6ff52-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'watering-6ff52.firebasestorage.app',
     measurementId: 'G-FCTJY7XFYK',
   );
@@ -56,7 +57,8 @@ class DefaultFirebaseOptions {
     appId: '1:106277281333:android:02691d376a6b2fa71e9b7c',
     messagingSenderId: '106277281333',
     projectId: 'watering-6ff52',
-    databaseURL: 'https://watering-6ff52-default-rtdb.asia-southeast1.firebasedatabase.app',
+    databaseURL:
+        'https://watering-6ff52-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'watering-6ff52.firebasestorage.app',
   );
 
@@ -65,7 +67,8 @@ class DefaultFirebaseOptions {
     appId: '1:106277281333:ios:acb87de6abd36eef1e9b7c',
     messagingSenderId: '106277281333',
     projectId: 'watering-6ff52',
-    databaseURL: 'https://watering-6ff52-default-rtdb.asia-southeast1.firebasedatabase.app',
+    databaseURL:
+        'https://watering-6ff52-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'watering-6ff52.firebasestorage.app',
     iosBundleId: 'com.example.wateringApp',
   );
@@ -75,7 +78,8 @@ class DefaultFirebaseOptions {
     appId: '1:106277281333:ios:acb87de6abd36eef1e9b7c',
     messagingSenderId: '106277281333',
     projectId: 'watering-6ff52',
-    databaseURL: 'https://watering-6ff52-default-rtdb.asia-southeast1.firebasedatabase.app',
+    databaseURL:
+        'https://watering-6ff52-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'watering-6ff52.firebasestorage.app',
     iosBundleId: 'com.example.wateringApp',
   );
@@ -86,9 +90,9 @@ class DefaultFirebaseOptions {
     messagingSenderId: '106277281333',
     projectId: 'watering-6ff52',
     authDomain: 'watering-6ff52.firebaseapp.com',
-    databaseURL: 'https://watering-6ff52-default-rtdb.asia-southeast1.firebasedatabase.app',
+    databaseURL:
+        'https://watering-6ff52-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'watering-6ff52.firebasestorage.app',
     measurementId: 'G-PXJ0DQE2H1',
   );
-
 }

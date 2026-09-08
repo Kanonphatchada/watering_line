@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shimmer/shimmer.dart';
 import 'calendar_page.dart';
 import 'graph_page.dart';
 import 'notification_history_page.dart';
+import 'add_device_page.dart';
 
 // 🔥 [เพิ่ม] สำหรับกลับไปหน้า login
 import 'login_page.dart';
+import '../main.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -18,10 +21,20 @@ class HomePage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color(0xFFA5D6A7), // 🌿 เขียวอ่อน
         title: const Text("🌱 หน้าหลัก"),
-
         actions: [
+          ValueListenableBuilder<ThemeMode>(
+            valueListenable: themeModeNotifier,
+            builder: (context, mode, _) {
+              return IconButton(
+                tooltip: mode == ThemeMode.dark ? "โหมดสว่าง" : "โหมดมืด",
+                icon: Icon(
+                  mode == ThemeMode.dark ? Icons.light_mode : Icons.dark_mode,
+                ),
+                onPressed: toggleThemeMode,
+              );
+            },
+          ),
           IconButton(
             icon: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -35,11 +48,9 @@ class HomePage extends StatelessWidget {
                   for (var doc in snapshot.data!.docs) {
                     final data = doc.data() as Map<String, dynamic>;
 
-                    double moisture =
-                        (data['Moisture'] ?? 0).toDouble();
+                    double moisture = (data['Moisture'] ?? 0).toDouble();
 
-                    double automois =
-                        (data['Automois'] ?? 0).toDouble();
+                    double automois = (data['Automois'] ?? 20).toDouble();
 
                     if (moisture > automois) {
                       count++;
@@ -48,33 +59,40 @@ class HomePage extends StatelessWidget {
                 }
 
                 return Stack(
+                  clipBehavior: Clip.none,
                   children: [
                     const Icon(Icons.notifications),
-
-                    if (count > 0)
-                      Positioned(
-                        right: 0,
-                        top: 0,
-                        child: Container(
-                          padding: const EdgeInsets.all(2),
-                          decoration: const BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
-                          ),
-                          constraints: const BoxConstraints(
-                            minWidth: 18,
-                            minHeight: 18,
-                          ),
-                          child: Text(
-                            '$count',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
+                    Positioned(
+                      right: -2,
+                      top: -2,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 250),
+                        transitionBuilder: (child, anim) =>
+                            ScaleTransition(scale: anim, child: child),
+                        child: count > 0
+                            ? Container(
+                                key: ValueKey(count),
+                                padding: const EdgeInsets.all(2),
+                                decoration: const BoxDecoration(
+                                  color: Colors.red,
+                                  shape: BoxShape.circle,
+                                ),
+                                constraints: const BoxConstraints(
+                                  minWidth: 18,
+                                  minHeight: 18,
+                                ),
+                                child: Text(
+                                  '$count',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              )
+                            : const SizedBox.shrink(key: ValueKey('none')),
                       ),
+                    ),
                   ],
                 );
               },
@@ -92,7 +110,7 @@ class HomePage extends StatelessWidget {
 
                 double moisture = (data['Moisture'] ?? 0).toDouble();
 
-                double automois = (data['Automois'] ?? 0).toDouble();
+                double automois = (data['Automois'] ?? 20).toDouble();
 
                 if (moisture > automois) {
                   alerts.add(
@@ -101,10 +119,23 @@ class HomePage extends StatelessWidget {
                 }
               }
 
+              if (!context.mounted) return;
+
               showDialog(
                 context: context,
                 builder: (context) => AlertDialog(
-                  title: const Text("แจ้งเตือน"),
+                  title: Row(
+                    children: [
+                      Icon(
+                        alerts.isEmpty
+                            ? Icons.check_circle
+                            : Icons.warning_amber_rounded,
+                        color: alerts.isEmpty ? Colors.green : Colors.red,
+                      ),
+                      const SizedBox(width: 8),
+                      const Text("แจ้งเตือน"),
+                    ],
+                  ),
                   content: SingleChildScrollView(
                     child: Text(
                       alerts.isEmpty
@@ -200,6 +231,8 @@ class HomePage extends StatelessWidget {
                         if (confirm == true) {
                           await FirebaseAuth.instance.signOut();
 
+                          if (!context.mounted) return;
+
                           Navigator.pushAndRemoveUntil(
                             context,
                             MaterialPageRoute(
@@ -227,193 +260,653 @@ class HomePage extends StatelessWidget {
           }
 
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const _HomeSkeleton();
           }
 
           final docs = snapshot.data!.docs;
 
           if (docs.isEmpty) {
-            return const Center(
-              child: Text("❌ ยังไม่มีอุปกรณ์ของคุณ"),
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.sensors_off,
+                      size: 56,
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      "ยังไม่มีอุปกรณ์ของคุณ",
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      "เพิ่มอุปกรณ์เพื่อเริ่มติดตามความชื้น",
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Theme.of(context).textTheme.bodySmall?.color,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const AddDevicePage(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.add),
+                      label: const Text("เพิ่มอุปกรณ์"),
+                    ),
+                  ],
+                ),
+              ),
             );
           }
 
-          return ListView(
-            children: docs.map((doc) {
-              final data = doc.data() as Map<String, dynamic>;
-              final nanoId = doc.id;
+          int alertCount = 0;
+          double moistureSum = 0;
+          for (final doc in docs) {
+            final data = doc.data() as Map<String, dynamic>;
+            final moisture = (data['Moisture'] ?? 0).toDouble();
+            final automois = (data['Automois'] ?? 20).toDouble();
+            moistureSum += moisture;
+            if (moisture > automois) alertCount++;
+          }
+          final avgMoisture = moistureSum / docs.length;
 
-              double currentTarget = (data['Automois'] ?? 20).toDouble();
-              final moisture = (data['Moisture'] ?? 0).toDouble();
-              final automois = (data['Automois'] ?? 20).toDouble();
-
-              final isAlert = moisture > automois;
-              TextEditingController controller =
-                  TextEditingController(text: currentTarget.toString());
-
-              return Card(
-                color: isAlert
-                    ? Colors.red.shade100
-                    : Colors.green.shade50,
-                margin: const EdgeInsets.all(12),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        nanoId,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text("Moisture: ${data['Moisture']}"),
-
-                      Text(
-                        isAlert
-                            ? "⚠️ สถานะ : ความชื้นสูงกว่าค่าที่กำหนด"
-                            : "✅ สถานะ : ปกติ",
-                        style: TextStyle(
-                          color: isAlert ? Colors.red : Colors.green,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-
-                      Text("Time: ${data['Time']}"),
-                      Text("Auto: ${data['Auto']}"),
-                      Text("Valve: ${data['Valve']}"),
-                      const SizedBox(height: 10),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              const Text("Auto"),
-                              Switch(
-                                value: data['Auto'] ?? false,
-                                activeColor: Colors.green,
-                                inactiveThumbColor: Colors.red,
-                                onChanged: (val) async {
-                                  await FirebaseFirestore.instance
-                                      .collection('ESP32')
-                                      .doc(nanoId)
-                                      .update({
-                                    'Auto': val,
-                                    if (val == true) 'Valve': false,
-                                  });
-                                },
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      Row(
-                        children: [
-                          const Text("Valve"),
-                          Switch(
-                            value: data['Valve'] ?? false,
-                            activeColor: Colors.green,
-                            inactiveThumbColor: Colors.red,
-                            onChanged: (val) async {
-                              await FirebaseFirestore.instance
-                                  .collection('ESP32')
-                                  .doc(nanoId)
-                                  .update({
-                                'Valve': val,
-                                if (val == true) 'Auto': false,
-                                if (val == false) 'Auto': true,
-                              });
-                            },
-                          ),
-                        ],
-                      ),
-                      Row(
-                        children: [
-                          const Text(" ตั้งค่าความชื้น: "),
-                          SizedBox(
-                            width: 80,
-                            child: TextField(
-                              controller: controller,
-                              keyboardType: TextInputType.number,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          ElevatedButton(
-                            onPressed: () async {
-                              final newValue = double.tryParse(controller.text);
-
-                              if (newValue != null) {
-                                await FirebaseFirestore.instance
-                                    .collection('ESP32')
-                                    .doc(nanoId)
-                                    .update({
-                                  'Automois': newValue,
-                                });
-
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text("✅ อัปเดตแล้ว"),
-                                  ),
-                                );
-                              }
-                            },
-                            child: const Text("บันทึก"),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          ElevatedButton(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => CalendarPage(nanoId: nanoId),
-                                ),
-                              );
-                            },
-                            child: const Text("📅 Calendar"),
-                          ),
-                          const SizedBox(width: 10),
-                          ElevatedButton(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => GraphPage(nanoId: nanoId),
-                                ),
-                              );
-                            },
-                            child: const Text("📈 Graph"),
-                          ),
-                          const SizedBox(width: 10),
-
-                          ElevatedButton(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      NotificationHistoryPage(
-                                    nanoId: nanoId,
-                                  ),
-                                ),
-                              );
-                            },
-                            child: const Text("🔔 History"),
-                          ),
-                        ],
-                      ),
-                    ],
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1100),
+              child: Column(
+                children: [
+                  _SummaryBar(
+                    totalDevices: docs.length,
+                    alertCount: alertCount,
+                    avgMoisture: avgMoisture,
                   ),
-                ),
-              );
-            }).toList(),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Wrap(
+                        alignment: WrapAlignment.center,
+                        runSpacing: 4,
+                        children: docs.map((doc) {
+                          final data = doc.data() as Map<String, dynamic>;
+                          final nanoId = doc.id;
+
+                          double currentTarget =
+                              (data['Automois'] ?? 20).toDouble();
+                          final moisture = (data['Moisture'] ?? 0).toDouble();
+                          final automois = (data['Automois'] ?? 20).toDouble();
+
+                          final isAlert = moisture > automois;
+                          TextEditingController controller =
+                              TextEditingController(
+                                  text: currentTarget.toString());
+
+                          return SizedBox(
+                            width: 420,
+                            child: Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(18),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        AnimatedContainer(
+                                          duration:
+                                              const Duration(milliseconds: 300),
+                                          width: 44,
+                                          height: 44,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: isAlert
+                                                ? Colors.red.shade50
+                                                : const Color(0xFFE8F5E9),
+                                          ),
+                                          child: Icon(
+                                            Icons.water_drop,
+                                            color: isAlert
+                                                ? Colors.red
+                                                : const Color(0xFF2E7D32),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                nanoId,
+                                                style: const TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              if (data['groupId'] != null)
+                                                Text(
+                                                  "กลุ่ม: ${data['groupId']}",
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: Theme.of(context)
+                                                        .textTheme
+                                                        .bodySmall
+                                                        ?.color,
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ),
+                                        _StatusChip(isAlert: isAlert),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .surfaceContainerHighest
+                                            .withValues(alpha: 0.4),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            child: _StatTile(
+                                              icon: Icons.water_drop,
+                                              label: "Moisture",
+                                              value: "${data['Moisture']}",
+                                            ),
+                                          ),
+                                          const _StatDivider(),
+                                          Expanded(
+                                            child: _StatTile(
+                                              icon: Icons.flag,
+                                              label: "Target",
+                                              value: currentTarget.toString(),
+                                            ),
+                                          ),
+                                          const _StatDivider(),
+                                          Expanded(
+                                            child: _StatTile(
+                                              icon: Icons.schedule,
+                                              label: "Time",
+                                              value: "${data['Time']}",
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 14),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: _ControlChip(
+                                            label: "Auto",
+                                            icon: Icons.auto_mode,
+                                            value: data['Auto'] ?? false,
+                                            onChanged: (val) async {
+                                              await FirebaseFirestore.instance
+                                                  .collection('ESP32')
+                                                  .doc(nanoId)
+                                                  .update({
+                                                'Auto': val,
+                                                if (val == true) 'Valve': false,
+                                              });
+                                            },
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: _ControlChip(
+                                            label: "Valve",
+                                            icon: Icons.water,
+                                            value: data['Valve'] ?? false,
+                                            onChanged: (val) async {
+                                              await FirebaseFirestore.instance
+                                                  .collection('ESP32')
+                                                  .doc(nanoId)
+                                                  .update({
+                                                'Valve': val,
+                                                if (val == true) 'Auto': false,
+                                                if (val == false) 'Auto': true,
+                                              });
+                                            },
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 14),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 10),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: Theme.of(context).dividerColor,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.tune,
+                                              size: 18,
+                                              color: Theme.of(context)
+                                                  .textTheme
+                                                  .bodySmall
+                                                  ?.color),
+                                          const SizedBox(width: 8),
+                                          const Expanded(
+                                            child: Text(
+                                              "ตั้งค่าความชื้น",
+                                              style: TextStyle(fontSize: 13),
+                                            ),
+                                          ),
+                                          SizedBox(
+                                            width: 70,
+                                            child: TextField(
+                                              controller: controller,
+                                              keyboardType:
+                                                  TextInputType.number,
+                                              textAlign: TextAlign.center,
+                                              style:
+                                                  const TextStyle(fontSize: 13),
+                                              decoration: const InputDecoration(
+                                                isDense: true,
+                                                contentPadding:
+                                                    EdgeInsets.symmetric(
+                                                        vertical: 8),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          SizedBox(
+                                            height: 36,
+                                            child: ElevatedButton(
+                                              style: ElevatedButton.styleFrom(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 14),
+                                              ),
+                                              onPressed: () async {
+                                                final newValue =
+                                                    double.tryParse(
+                                                        controller.text);
+
+                                                if (newValue != null) {
+                                                  await FirebaseFirestore
+                                                      .instance
+                                                      .collection('ESP32')
+                                                      .doc(nanoId)
+                                                      .update({
+                                                    'Automois': newValue,
+                                                  });
+
+                                                  if (!context.mounted) return;
+
+                                                  ScaffoldMessenger.of(context)
+                                                      .showSnackBar(
+                                                    const SnackBar(
+                                                      content:
+                                                          Text("✅ อัปเดตแล้ว"),
+                                                    ),
+                                                  );
+                                                }
+                                              },
+                                              child: const Text("บันทึก"),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 14),
+                                    const Divider(height: 1),
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: _ActionButton(
+                                            icon: Icons.calendar_month,
+                                            label: "Calendar",
+                                            onTap: () {
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (_) => CalendarPage(
+                                                      nanoId: nanoId),
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                        Expanded(
+                                          child: _ActionButton(
+                                            icon: Icons.show_chart,
+                                            label: "Graph",
+                                            onTap: () {
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      GraphPage(nanoId: nanoId),
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                        Expanded(
+                                          child: _ActionButton(
+                                            icon: Icons.notifications_outlined,
+                                            label: "History",
+                                            onTap: () {
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      NotificationHistoryPage(
+                                                    nanoId: nanoId,
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _HomeSkeleton extends StatelessWidget {
+  const _HomeSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final base = isDark ? Colors.grey.shade800 : Colors.grey.shade300;
+    final highlight = isDark ? Colors.grey.shade700 : Colors.grey.shade100;
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1100),
+        child: Shimmer.fromColors(
+          baseColor: base,
+          highlightColor: highlight,
+          child: Wrap(
+            alignment: WrapAlignment.center,
+            children: List.generate(
+              3,
+              (_) => Container(
+                width: 420,
+                height: 320,
+                margin: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: base,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SummaryBar extends StatelessWidget {
+  final int totalDevices;
+  final int alertCount;
+  final double avgMoisture;
+
+  const _SummaryBar({
+    required this.totalDevices,
+    required this.alertCount,
+    required this.avgMoisture,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        child: Row(
+          children: [
+            Expanded(
+              child: _StatTile(
+                icon: Icons.sensors,
+                label: "อุปกรณ์ทั้งหมด",
+                value: "$totalDevices",
+              ),
+            ),
+            const _StatDivider(),
+            Expanded(
+              child: _StatTile(
+                icon: Icons.warning_amber_rounded,
+                label: "แจ้งเตือน",
+                value: "$alertCount",
+              ),
+            ),
+            const _StatDivider(),
+            Expanded(
+              child: _StatTile(
+                icon: Icons.water_drop,
+                label: "ความชื้นเฉลี่ย",
+                value: avgMoisture.toStringAsFixed(1),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  final bool isAlert;
+
+  const _StatusChip({required this.isAlert});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isAlert ? Colors.red : Colors.green;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            isAlert ? Icons.warning_amber_rounded : Icons.check_circle,
+            size: 16,
+            color: color,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            isAlert ? "แจ้งเตือน" : "ปกติ",
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _StatTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Icon(icon, size: 18, color: const Color(0xFF2E7D32)),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+          textAlign: TextAlign.center,
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: Theme.of(context).textTheme.bodySmall?.color,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+}
+
+class _StatDivider extends StatelessWidget {
+  const _StatDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 36,
+      color: Theme.of(context).dividerColor,
+    );
+  }
+}
+
+class _ControlChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _ControlChip({
+    required this.label,
+    required this.icon,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const activeColor = Color(0xFF2E7D32);
+    final mutedColor = Theme.of(context).textTheme.bodySmall?.color;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: value
+            ? activeColor.withValues(alpha: 0.10)
+            : Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: value
+              ? activeColor.withValues(alpha: 0.4)
+              : Theme.of(context).dividerColor,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: value ? activeColor : mutedColor),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: value ? activeColor : mutedColor,
+              ),
+            ),
+          ),
+          Transform.scale(
+            scale: 0.8,
+            child: Switch(
+              value: value,
+              activeThumbColor: activeColor,
+              inactiveThumbColor: Colors.grey,
+              onChanged: onChanged,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _ActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          children: [
+            Icon(icon, size: 20, color: const Color(0xFF2E7D32)),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).textTheme.bodyMedium?.color,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
