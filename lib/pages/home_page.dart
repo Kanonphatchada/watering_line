@@ -6,6 +6,7 @@ import 'calendar_page.dart';
 import 'graph_page.dart';
 import 'notification_history_page.dart';
 import 'add_device_page.dart';
+import 'profile_page.dart';
 
 // 🔥 [เพิ่ม] สำหรับกลับไปหน้า login
 import 'login_page.dart';
@@ -184,22 +185,42 @@ class HomePage extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    SizedBox(
-                      width: 80,
-                      child: Text(
-                        name,
-                        style: const TextStyle(fontSize: 14),
-                        overflow: TextOverflow.ellipsis,
+                    InkWell(
+                      borderRadius: BorderRadius.circular(20),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const ProfilePage(),
+                          ),
+                        );
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 4, vertical: 4),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 80,
+                              child: Text(
+                                name,
+                                style: const TextStyle(fontSize: 14),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            CircleAvatar(
+                              radius: 16,
+                              backgroundImage:
+                                  pic != null ? NetworkImage(pic) : null,
+                              child: pic == null
+                                  ? const Icon(Icons.person, size: 16)
+                                  : null,
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-
-                    const SizedBox(width: 8),
-                    CircleAvatar(
-                      radius: 16,
-                      backgroundImage: pic != null ? NetworkImage(pic) : null,
-                      child: pic == null
-                          ? const Icon(Icons.person, size: 16)
-                          : null,
                     ),
 
                     // 🔥 =========================
