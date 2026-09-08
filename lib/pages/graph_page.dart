@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -73,6 +74,30 @@ class _GraphPageState extends State<GraphPage> {
     });
   }
 
+  // เลือกระยะห่างของเส้นกริด/ป้ายแกน Y ให้เป็นตัวเลขกลมๆ (1, 2, 5, 10, 20, 50, ...)
+  // ปรับตามขนาดช่วงแกนจริง กันป้ายตัวเลขทับกันเวลาช่วงแกนกว้างหรือแคบมาก
+  double get _axisInterval {
+    final range = maxY - minY;
+    if (range <= 0) return 1;
+
+    final rawStep = range / 5;
+    final magnitude = math.pow(10, (math.log(rawStep) / math.ln10).floor());
+    final residual = rawStep / magnitude;
+
+    final double niceResidual;
+    if (residual <= 1) {
+      niceResidual = 1;
+    } else if (residual <= 2) {
+      niceResidual = 2;
+    } else if (residual <= 5) {
+      niceResidual = 5;
+    } else {
+      niceResidual = 10;
+    }
+
+    return niceResidual * magnitude;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -134,10 +159,17 @@ class _GraphPageState extends State<GraphPage> {
                         BarChartData(
                           minY: minY,
                           maxY: maxY,
-                          gridData: const FlGridData(show: true),
+                          gridData: FlGridData(
+                            show: true,
+                            horizontalInterval: _axisInterval,
+                          ),
                           titlesData: FlTitlesData(
                             leftTitles: AxisTitles(
-                              sideTitles: SideTitles(showTitles: true),
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                interval: _axisInterval,
+                                reservedSize: 40,
+                              ),
                             ),
                             bottomTitles: const AxisTitles(
                               sideTitles: SideTitles(showTitles: false),
