@@ -7,6 +7,7 @@ import 'graph_page.dart';
 import 'notification_history_page.dart';
 import 'add_device_page.dart';
 import 'profile_page.dart';
+import '../widgets/avatar.dart';
 
 // 🔥 [เพิ่ม] สำหรับกลับไปหน้า login
 import 'login_page.dart';
@@ -210,14 +211,7 @@ class HomePage extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            CircleAvatar(
-                              radius: 16,
-                              backgroundImage:
-                                  pic != null ? NetworkImage(pic) : null,
-                              child: pic == null
-                                  ? const Icon(Icons.person, size: 16)
-                                  : null,
-                            ),
+                            Avatar(photoUrl: pic, size: 32),
                           ],
                         ),
                       ),

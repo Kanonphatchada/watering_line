@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'login_page.dart';
+import '../widgets/avatar.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -124,14 +125,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     child: ListView(
                       padding: const EdgeInsets.all(20),
                       children: [
-                        CircleAvatar(
-                          radius: 48,
-                          backgroundImage:
-                              photoUrl != null ? NetworkImage(photoUrl!) : null,
-                          child: photoUrl == null
-                              ? const Icon(Icons.person, size: 48)
-                              : null,
-                        ),
+                        Center(child: Avatar(photoUrl: photoUrl, size: 96)),
                         const SizedBox(height: 20),
                         Card(
                           child: Padding(
@@ -225,15 +219,6 @@ class _ProfilePageState extends State<ProfilePage> {
                                     trailing: Text("$count เครื่อง"),
                                   );
                                 },
-                              ),
-                              const Divider(height: 1),
-                              ListTile(
-                                leading: const Icon(Icons.fingerprint),
-                                title: const Text("รหัสผู้ใช้ (UID)"),
-                                subtitle: Text(
-                                  user.uid,
-                                  style: const TextStyle(fontSize: 11),
-                                ),
                               ),
                             ],
                           ),
