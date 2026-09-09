@@ -16,6 +16,8 @@ class _CalendarPageState extends State<CalendarPage> {
   Map<DateTime, double> moisturePerDay = {};
   double targetMoisture = 0; // 🔥 ไม่ต้อง fix แล้ว
   bool isLoading = true;
+  DateTime _focusedDay = DateTime.now();
+  DateTime? _selectedDay;
 
   @override
   void initState() {
@@ -43,6 +45,9 @@ class _CalendarPageState extends State<CalendarPage> {
         .doc(widget.nanoId)
         .collection('Logs')
         .where('timestamp', isGreaterThan: past30)
+        .orderBy('timestamp', descending: true)
+        // กันเผื่ออุปกรณ์บันทึกถี่มาก ไม่ให้โหลดเอกสารไม่จำกัดจำนวน
+        .limit(2000)
         .get();
 
     for (var doc in logs.docs) {
@@ -52,7 +57,8 @@ class _CalendarPageState extends State<CalendarPage> {
       final moisture = (data['moisture'] as num).toDouble();
 
       final day = DateTime(ts.year, ts.month, ts.day);
-      moisturePerDay[day] = moisture;
+      // เรียงจากใหม่ไปเก่า และเก็บแค่ค่าแรกที่เจอของแต่ละวัน (ค่าล่าสุดของวันนั้น)
+      moisturePerDay.putIfAbsent(day, () => moisture);
     }
 
     setState(() {
@@ -86,6 +92,9 @@ class _CalendarPageState extends State<CalendarPage> {
 
   Widget _buildContent(BuildContext context) {
     final theme = Theme.of(context);
+    final avgMoisture = moisturePerDay.isEmpty
+        ? null
+        : moisturePerDay.values.reduce((a, b) => a + b) / moisturePerDay.length;
 
     return Center(
       child: ConstrainedBox(
@@ -112,6 +121,26 @@ class _CalendarPageState extends State<CalendarPage> {
                         ),
                       ],
                     ),
+                    if (avgMoisture != null) ...[
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.show_chart,
+                            size: 16,
+                            color: theme.textTheme.bodySmall?.color,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            "ค่าเฉลี่ย 30 วัน: ${avgMoisture.toStringAsFixed(1)}",
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: theme.textTheme.bodySmall?.color,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 10),
                     Wrap(
                       spacing: 16,
@@ -146,9 +175,21 @@ class _CalendarPageState extends State<CalendarPage> {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: TableCalendar(
-                    firstDay: DateTime.now().subtract(const Duration(days: 30)),
+                    // ให้เลื่อนย้อนดูเดือนก่อนๆได้เสมอ (ไม่ใช่แค่ 30 วันล่าสุด)
+                    // แม้ข้อมูลจริงจะมีแค่ 30 วันย้อนหลัง เดือนที่เก่ากว่านั้นจะ
+                    // โชว์เป็น "ไม่มีข้อมูล" ตามจริง แทนที่จะล็อกไม่ให้เลื่อนไปดูเลย
+                    firstDay:
+                        DateTime.now().subtract(const Duration(days: 365)),
                     lastDay: DateTime.now(),
-                    focusedDay: DateTime.now(),
+                    focusedDay: _focusedDay,
+                    selectedDayPredicate: (day) =>
+                        _selectedDay != null &&
+                        day.year == _selectedDay!.year &&
+                        day.month == _selectedDay!.month &&
+                        day.day == _selectedDay!.day,
+                    onPageChanged: (focusedDay) {
+                      _focusedDay = focusedDay;
+                    },
 
                     headerStyle: HeaderStyle(
                       formatButtonVisible: false,
@@ -190,6 +231,11 @@ class _CalendarPageState extends State<CalendarPage> {
                     onDaySelected: (selectedDay, focusedDay) {
                       final d = DateTime(
                           selectedDay.year, selectedDay.month, selectedDay.day);
+
+                      setState(() {
+                        _selectedDay = d;
+                        _focusedDay = focusedDay;
+                      });
 
                       final moisture = moisturePerDay[d];
 
@@ -242,6 +288,16 @@ class _CalendarPageState extends State<CalendarPage> {
                     calendarBuilders: CalendarBuilders(
                       defaultBuilder: (context, day, focusedDay) {
                         final d = DateTime(day.year, day.month, day.day);
+                        final isSelected = _selectedDay != null &&
+                            d.year == _selectedDay!.year &&
+                            d.month == _selectedDay!.month &&
+                            d.day == _selectedDay!.day;
+                        final selectionBorder = isSelected
+                            ? Border.all(
+                                color: theme.colorScheme.primary,
+                                width: 2,
+                              )
+                            : null;
 
                         if (moisturePerDay.containsKey(d)) {
                           final moisture = moisturePerDay[d]!;
@@ -251,6 +307,7 @@ class _CalendarPageState extends State<CalendarPage> {
                             decoration: BoxDecoration(
                               color: getColor(moisture),
                               shape: BoxShape.circle,
+                              border: selectionBorder,
                             ),
                             child: Center(
                               child: Text(
@@ -270,6 +327,7 @@ class _CalendarPageState extends State<CalendarPage> {
                                 ? Colors.white.withValues(alpha: 0.06)
                                 : Colors.black.withValues(alpha: 0.05),
                             shape: BoxShape.circle,
+                            border: selectionBorder,
                           ),
                           child: Center(
                             child: Text(
