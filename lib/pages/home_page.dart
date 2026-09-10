@@ -268,6 +268,7 @@ class HomePage extends StatelessWidget {
         stream: FirebaseFirestore.instance
             .collection('ESP32')
             .where('uid', isEqualTo: uid)
+            .orderBy(FieldPath.documentId)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
@@ -347,304 +348,26 @@ class HomePage extends StatelessWidget {
                     avgMoisture: avgMoisture,
                   ),
                   Expanded(
-                    child: SingleChildScrollView(
+                    child: GridView.builder(
                       padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Wrap(
-                        alignment: WrapAlignment.center,
-                        runSpacing: 4,
-                        children: docs.map((doc) {
-                          final data = doc.data() as Map<String, dynamic>;
-                          final nanoId = doc.id;
-
-                          double currentTarget =
-                              (data['Automois'] ?? 20).toDouble();
-                          final moisture = (data['Moisture'] ?? 0).toDouble();
-                          final automois = (data['Automois'] ?? 20).toDouble();
-
-                          final isAlert = moisture > automois;
-                          TextEditingController controller =
-                              TextEditingController(
-                                  text: currentTarget.toString());
-
-                          return SizedBox(
-                            width: 420,
-                            child: Card(
-                              child: Padding(
-                                padding: const EdgeInsets.all(18),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        AnimatedContainer(
-                                          duration:
-                                              const Duration(milliseconds: 300),
-                                          width: 44,
-                                          height: 44,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            color: isAlert
-                                                ? Colors.red.shade50
-                                                : const Color(0xFFE8F5E9),
-                                          ),
-                                          child: Icon(
-                                            Icons.water_drop,
-                                            color: isAlert
-                                                ? Colors.red
-                                                : const Color(0xFF2E7D32),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                nanoId,
-                                                style: const TextStyle(
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                              if (data['groupId'] != null)
-                                                Text(
-                                                  "กลุ่ม: ${data['groupId']}",
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    color: Theme.of(context)
-                                                        .textTheme
-                                                        .bodySmall
-                                                        ?.color,
-                                                  ),
-                                                ),
-                                            ],
-                                          ),
-                                        ),
-                                        _StatusChip(isAlert: isAlert),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 12, vertical: 12),
-                                      decoration: BoxDecoration(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .surfaceContainerHighest
-                                            .withValues(alpha: 0.4),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Expanded(
-                                            child: _StatTile(
-                                              icon: Icons.water_drop,
-                                              label: "Moisture",
-                                              value: "${data['Moisture']}",
-                                            ),
-                                          ),
-                                          const _StatDivider(),
-                                          Expanded(
-                                            child: _StatTile(
-                                              icon: Icons.flag,
-                                              label: "Target",
-                                              value: currentTarget.toString(),
-                                            ),
-                                          ),
-                                          const _StatDivider(),
-                                          Expanded(
-                                            child: _StatTile(
-                                              icon: Icons.schedule,
-                                              label: "Time",
-                                              value: "${data['Time']}",
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(height: 14),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: _ControlChip(
-                                            label: "Auto",
-                                            icon: Icons.auto_mode,
-                                            value: data['Auto'] ?? false,
-                                            onChanged: (val) async {
-                                              await FirebaseFirestore.instance
-                                                  .collection('ESP32')
-                                                  .doc(nanoId)
-                                                  .update({
-                                                'Auto': val,
-                                                if (val == true) 'Valve': false,
-                                              });
-                                            },
-                                          ),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: _ControlChip(
-                                            label: "Valve",
-                                            icon: Icons.water,
-                                            value: data['Valve'] ?? false,
-                                            onChanged: (val) async {
-                                              await FirebaseFirestore.instance
-                                                  .collection('ESP32')
-                                                  .doc(nanoId)
-                                                  .update({
-                                                'Valve': val,
-                                                if (val == true) 'Auto': false,
-                                                if (val == false) 'Auto': true,
-                                              });
-                                            },
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 14),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 12, vertical: 10),
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(
-                                          color: Theme.of(context).dividerColor,
-                                        ),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Icon(Icons.tune,
-                                              size: 18,
-                                              color: Theme.of(context)
-                                                  .textTheme
-                                                  .bodySmall
-                                                  ?.color),
-                                          const SizedBox(width: 8),
-                                          const Expanded(
-                                            child: Text(
-                                              "ตั้งค่าความชื้น",
-                                              style: TextStyle(fontSize: 13),
-                                            ),
-                                          ),
-                                          SizedBox(
-                                            width: 70,
-                                            child: TextField(
-                                              controller: controller,
-                                              keyboardType:
-                                                  TextInputType.number,
-                                              textAlign: TextAlign.center,
-                                              style:
-                                                  const TextStyle(fontSize: 13),
-                                              decoration: const InputDecoration(
-                                                isDense: true,
-                                                contentPadding:
-                                                    EdgeInsets.symmetric(
-                                                        vertical: 8),
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          SizedBox(
-                                            height: 36,
-                                            child: ElevatedButton(
-                                              style: ElevatedButton.styleFrom(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                        horizontal: 14),
-                                              ),
-                                              onPressed: () async {
-                                                final newValue =
-                                                    double.tryParse(
-                                                        controller.text);
-
-                                                if (newValue != null) {
-                                                  await FirebaseFirestore
-                                                      .instance
-                                                      .collection('ESP32')
-                                                      .doc(nanoId)
-                                                      .update({
-                                                    'Automois': newValue,
-                                                  });
-
-                                                  if (!context.mounted) return;
-
-                                                  ScaffoldMessenger.of(context)
-                                                      .showSnackBar(
-                                                    const SnackBar(
-                                                      content:
-                                                          Text("✅ อัปเดตแล้ว"),
-                                                    ),
-                                                  );
-                                                }
-                                              },
-                                              child: const Text("บันทึก"),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(height: 14),
-                                    const Divider(height: 1),
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: _ActionButton(
-                                            icon: Icons.calendar_month,
-                                            label: "Calendar",
-                                            onTap: () {
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (_) => CalendarPage(
-                                                      nanoId: nanoId),
-                                                ),
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                        Expanded(
-                                          child: _ActionButton(
-                                            icon: Icons.show_chart,
-                                            label: "Graph",
-                                            onTap: () {
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (_) =>
-                                                      GraphPage(nanoId: nanoId),
-                                                ),
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                        Expanded(
-                                          child: _ActionButton(
-                                            icon: Icons.notifications_outlined,
-                                            label: "History",
-                                            onTap: () {
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (_) =>
-                                                      NotificationHistoryPage(
-                                                    nanoId: nanoId,
-                                                  ),
-                                                ),
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          );
-                        }).toList(),
+                      gridDelegate:
+                          const SliverGridDelegateWithMaxCrossAxisExtent(
+                        maxCrossAxisExtent: 420,
+                        mainAxisExtent: 440,
+                        mainAxisSpacing: 16,
+                        crossAxisSpacing: 16,
                       ),
+                      itemCount: docs.length,
+                      itemBuilder: (context, index) {
+                        final doc = docs[index];
+                        final data = doc.data() as Map<String, dynamic>;
+
+                        return _DeviceCard(
+                          key: ValueKey(doc.id),
+                          nanoId: doc.id,
+                          data: data,
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -652,6 +375,307 @@ class HomePage extends StatelessWidget {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _DeviceCard extends StatefulWidget {
+  final String nanoId;
+  final Map<String, dynamic> data;
+
+  const _DeviceCard({super.key, required this.nanoId, required this.data});
+
+  @override
+  State<_DeviceCard> createState() => _DeviceCardState();
+}
+
+class _DeviceCardState extends State<_DeviceCard> {
+  late final TextEditingController _controller;
+  final _focusNode = FocusNode();
+
+  double get _currentTarget => (widget.data['Automois'] ?? 20).toDouble();
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: _currentTarget.toString());
+  }
+
+  @override
+  void didUpdateWidget(covariant _DeviceCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // ซิงก์ค่าจาก Firestore เข้า field เฉพาะตอนที่ user ไม่ได้กำลังพิมพ์อยู่
+    // กันไม่ให้ค่าที่พิมพ์ค้างถูกทับตอน snapshot ใหม่เข้ามาระหว่างพิมพ์
+    if (!_focusNode.hasFocus) {
+      _controller.text = _currentTarget.toString();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final nanoId = widget.nanoId;
+    final data = widget.data;
+    final currentTarget = _currentTarget;
+    final moisture = (data['Moisture'] ?? 0).toDouble();
+    final automois = (data['Automois'] ?? 20).toDouble();
+    final isAlert = moisture > automois;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color:
+                        isAlert ? Colors.red.shade50 : const Color(0xFFE8F5E9),
+                  ),
+                  child: Icon(
+                    Icons.water_drop,
+                    color: isAlert ? Colors.red : const Color(0xFF2E7D32),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        nanoId,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (data['groupId'] != null)
+                        Text(
+                          "กลุ่ม: ${data['groupId']}",
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(context).textTheme.bodySmall?.color,
+                          ),
+                        ),
+                      const SizedBox(height: 2),
+                      _LastUpdatedText(nanoId: nanoId),
+                    ],
+                  ),
+                ),
+                _StatusChip(isAlert: isAlert),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              decoration: BoxDecoration(
+                color: Theme.of(context)
+                    .colorScheme
+                    .surfaceContainerHighest
+                    .withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _StatTile(
+                      icon: Icons.water_drop,
+                      label: "Moisture",
+                      value: "${data['Moisture']}",
+                    ),
+                  ),
+                  const _StatDivider(),
+                  Expanded(
+                    child: _StatTile(
+                      icon: Icons.flag,
+                      label: "Target",
+                      value: currentTarget.toString(),
+                    ),
+                  ),
+                  const _StatDivider(),
+                  Expanded(
+                    child: _StatTile(
+                      icon: Icons.schedule,
+                      label: "Time",
+                      value: "${data['Time']}",
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: _ControlChip(
+                    label: "Auto",
+                    icon: Icons.auto_mode,
+                    value: data['Auto'] ?? false,
+                    onChanged: (val) async {
+                      await FirebaseFirestore.instance
+                          .collection('ESP32')
+                          .doc(nanoId)
+                          .update({
+                        'Auto': val,
+                        if (val == true) 'Valve': false,
+                      });
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _ControlChip(
+                    label: "Valve",
+                    icon: Icons.water,
+                    value: data['Valve'] ?? false,
+                    onChanged: (val) async {
+                      await FirebaseFirestore.instance
+                          .collection('ESP32')
+                          .doc(nanoId)
+                          .update({
+                        'Valve': val,
+                        if (val == true) 'Auto': false,
+                        if (val == false) 'Auto': true,
+                      });
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Theme.of(context).dividerColor,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.tune,
+                      size: 18,
+                      color: Theme.of(context).textTheme.bodySmall?.color),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      "ตั้งค่าความชื้น",
+                      style: TextStyle(fontSize: 13),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 70,
+                    child: TextField(
+                      controller: _controller,
+                      focusNode: _focusNode,
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 13),
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(vertical: 8),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    height: 36,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                      ),
+                      onPressed: () async {
+                        final newValue = double.tryParse(_controller.text);
+
+                        if (newValue != null) {
+                          await FirebaseFirestore.instance
+                              .collection('ESP32')
+                              .doc(nanoId)
+                              .update({
+                            'Automois': newValue,
+                          });
+
+                          if (!context.mounted) return;
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text("✅ อัปเดตแล้ว"),
+                            ),
+                          );
+                        }
+                      },
+                      child: const Text("บันทึก"),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Divider(height: 1),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _ActionButton(
+                    icon: Icons.calendar_month,
+                    label: "Calendar",
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => CalendarPage(nanoId: nanoId),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                Expanded(
+                  child: _ActionButton(
+                    icon: Icons.show_chart,
+                    label: "Graph",
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => GraphPage(nanoId: nanoId),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                Expanded(
+                  child: _ActionButton(
+                    icon: Icons.notifications_outlined,
+                    label: "History",
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => NotificationHistoryPage(
+                            nanoId: nanoId,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -706,33 +730,88 @@ class _SummaryBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const okColor = Color(0xFF2E7D32);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: _KpiCard(
+              icon: Icons.sensors,
+              iconColor: okColor,
+              label: "อุปกรณ์ทั้งหมด",
+              value: "$totalDevices",
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _KpiCard(
+              icon: Icons.warning_amber_rounded,
+              iconColor: alertCount > 0 ? Colors.red : okColor,
+              label: "แจ้งเตือน",
+              value: "$alertCount",
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _KpiCard(
+              icon: Icons.water_drop,
+              iconColor: const Color(0xFF1E88E5),
+              label: "ความชื้นเฉลี่ย",
+              value: avgMoisture.toStringAsFixed(1),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _KpiCard extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String label;
+  final String value;
+
+  const _KpiCard({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-        child: Row(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: _StatTile(
-                icon: Icons.sensors,
-                label: "อุปกรณ์ทั้งหมด",
-                value: "$totalDevices",
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: iconColor.withValues(alpha: 0.12),
               ),
+              child: Icon(icon, size: 18, color: iconColor),
             ),
-            const _StatDivider(),
-            Expanded(
-              child: _StatTile(
-                icon: Icons.warning_amber_rounded,
-                label: "แจ้งเตือน",
-                value: "$alertCount",
-              ),
+            const SizedBox(height: 10),
+            Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 20),
             ),
-            const _StatDivider(),
-            Expanded(
-              child: _StatTile(
-                icon: Icons.water_drop,
-                label: "ความชื้นเฉลี่ย",
-                value: avgMoisture.toStringAsFixed(1),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).textTheme.bodySmall?.color,
               ),
             ),
           ],
@@ -923,6 +1002,56 @@ class _ActionButton extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _LastUpdatedText extends StatelessWidget {
+  final String nanoId;
+
+  const _LastUpdatedText({required this.nanoId});
+
+  String _relativeTime(DateTime time) {
+    final diff = DateTime.now().difference(time);
+    if (diff.inMinutes < 1) return "เมื่อสักครู่";
+    if (diff.inMinutes < 60) return "${diff.inMinutes} นาทีที่แล้ว";
+    if (diff.inHours < 24) return "${diff.inHours} ชม. ที่แล้ว";
+    return "${diff.inDays} วันที่แล้ว";
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<QuerySnapshot>(
+      future: FirebaseFirestore.instance
+          .collection('ESP32')
+          .doc(nanoId)
+          .collection('Logs')
+          .orderBy('timestamp', descending: true)
+          .limit(1)
+          .get(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        final data = snapshot.data!.docs.first.data() as Map<String, dynamic>;
+        final ts = data['timestamp'] as Timestamp?;
+        if (ts == null) return const SizedBox.shrink();
+
+        final color = Theme.of(context).textTheme.bodySmall?.color;
+
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.update, size: 12, color: color),
+            const SizedBox(width: 4),
+            Text(
+              "อัปเดตล่าสุด: ${_relativeTime(ts.toDate())}",
+              style: TextStyle(fontSize: 11, color: color),
+            ),
+          ],
+        );
+      },
     );
   }
 }

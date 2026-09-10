@@ -1,0 +1,7 @@
+{
+  // Pin Flutter DevTools to a port far away from footpath_apis' range
+  // (9100-9104 are reserved for footpath_apis and its docker services).
+  // Without this, DevTools defaults to 9100 and can shadow footpath_apis
+  // on 127.0.0.1, making it look like the API disappeared.
+  "dart.devToolsPort": 9500
+}

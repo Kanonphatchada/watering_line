@@ -101,13 +101,7 @@ class _AddDevicePageState extends State<AddDevicePage> {
 
     print("STEP 3: ผ่านทุกเงื่อนไข");
 
-    await docRef.update({
-      'ownerUid': uid,
-    });
-
-    print("STEP 4: update ownerUid แล้ว");
-
-    // 🔥 STEP 1: หา nano ทั้งหมดที่ groupId ตรงกัน
+    // 🔥 หา nano ทั้งหมดที่ groupId ตรงกัน
     final snapshot = await FirebaseFirestore.instance
         .collection('ESP32')
         .where('groupId', isEqualTo: deviceId)
@@ -115,12 +109,17 @@ class _AddDevicePageState extends State<AddDevicePage> {
 
     print("เจอ nano: ${snapshot.docs.length}");
 
-    // 🔥 STEP 2: update uid เข้า nano ทุกตัว
-    for (var nanoDoc in snapshot.docs) {
-      await nanoDoc.reference.update({
-        'uid': uid,
-      });
+    // 🔥 ผูก ownerUid ของ device_registry + uid ของทุก nano ในคำสั่งเดียว (atomic)
+    // กันกรณีเน็ตหลุดกลางทาง ที่ทำให้ device ถูก mark ว่า "ถูกใช้แล้ว"
+    // ทั้งที่ ESP32 บางตัวยังไม่ถูกผูก uid จริง
+    final batch = FirebaseFirestore.instance.batch();
+    batch.update(docRef, {'ownerUid': uid});
+    for (final nanoDoc in snapshot.docs) {
+      batch.update(nanoDoc.reference, {'uid': uid});
     }
+    await batch.commit();
+
+    print("STEP 4: ผูกอุปกรณ์สำเร็จ (atomic)");
     // 🔥 แก้สำคัญ: ให้ user กดก่อน
 
     await showPopup("เชื่อมต่อสำเร็จ");
