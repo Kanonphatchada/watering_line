@@ -1312,6 +1312,22 @@ class _MoistureSparklineState extends State<_MoistureSparkline> {
     ];
   }
 
+  // กรอบตายตัวรอบกราฟ (ความสูงคงที่เสมอ ไม่ขยับตามข้อมูล) ใช้ทั้งตอนมีกราฟ
+  // จริงและตอนยังไม่มีข้อมูล กันการ์ดหน้าตาไม่เท่ากันระหว่างอุปกรณ์ที่มี
+  // ข้อมูลกับยังไม่มี — แกน Y ข้างในปรับสเกลเข้าหาข้อมูลเอง กราฟเลยไม่มีทาง
+  // "โต" จนล้นกรอบนี้
+  Widget _frame(BuildContext context, {required Widget child}) {
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        border: Border.all(color: Theme.of(context).dividerColor),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<FlSpot>>(
@@ -1319,7 +1335,18 @@ class _MoistureSparklineState extends State<_MoistureSparkline> {
       builder: (context, snapshot) {
         final spots = snapshot.data;
         if (spots == null || spots.length < 2) {
-          return const SizedBox.shrink(); // ยังไม่มีข้อมูลพอวาดกราฟ
+          return _frame(
+            context,
+            child: Center(
+              child: Text(
+                "ยังไม่มีข้อมูลกราฟ",
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Theme.of(context).textTheme.bodySmall?.color,
+                ),
+              ),
+            ),
+          );
         }
 
         final ys = spots.map((s) => s.y);
@@ -1327,15 +1354,8 @@ class _MoistureSparklineState extends State<_MoistureSparkline> {
         final maxY = ys.reduce((a, b) => a > b ? a : b);
         final pad = (maxY - minY) * 0.15;
 
-        // กรอบตายตัวรอบกราฟ (ความสูงคงที่เสมอ ไม่ขยับตามข้อมูล) — แกน Y
-        // ข้างในปรับสเกลเข้าหาข้อมูลเอง กราฟเลยไม่มีทาง "โต" จนล้นกรอบนี้
-        return Container(
-          height: 44,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            border: Border.all(color: Theme.of(context).dividerColor),
-            borderRadius: BorderRadius.circular(10),
-          ),
+        return _frame(
+          context,
           child: LineChart(
             LineChartData(
               minY: minY - pad - 1,
