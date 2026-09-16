@@ -353,7 +353,9 @@ class HomePage extends StatelessWidget {
                       gridDelegate:
                           const SliverGridDelegateWithMaxCrossAxisExtent(
                         maxCrossAxisExtent: 420,
-                        mainAxisExtent: 440,
+                        // 440 เดิม + ที่ว่างสำหรับ sparkline ที่เพิ่มเข้ามาใหม่
+                        // (สูง 36 + spacing รอบข้าง 24) กันการ์ด overflow
+                        mainAxisExtent: 500,
                         mainAxisSpacing: 16,
                         crossAxisSpacing: 16,
                       ),
@@ -487,7 +489,10 @@ class _DeviceCardState extends State<_DeviceCard> {
                           ),
                         ),
                       const SizedBox(height: 2),
-                      _LastUpdatedText(nanoId: nanoId),
+                      _LastUpdatedText(
+                        nanoId: nanoId,
+                        lastSeen: data['lastSeen'] as Timestamp?,
+                      ),
                     ],
                   ),
                 ),
@@ -635,8 +640,28 @@ class _DeviceCardState extends State<_DeviceCard> {
                           if (!context.mounted) return;
 
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("✅ อัปเดตแล้ว"),
+                            SnackBar(
+                              behavior: SnackBarBehavior.floating,
+                              backgroundColor: const Color(0xFF2E7D32),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              margin: const EdgeInsets.all(16),
+                              content: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.check_circle,
+                                      color: Colors.white, size: 20),
+                                  SizedBox(width: 10),
+                                  Text(
+                                    "อัปเดตค่าความชื้นแล้ว",
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           );
                         }
@@ -1086,41 +1111,50 @@ class _ActionButton extends StatelessWidget {
 
 class _LastUpdatedText extends StatefulWidget {
   final String nanoId;
+  // ประทับจาก /update ตรงๆ ทุกครั้งที่อุปกรณ์รายงานค่าจริง — อัปเดตสดตาม
+  // stream ของ ESP32 doc อยู่แล้ว ไม่ต้อง query ซ้ำ ถ้าเป็น null (อุปกรณ์เก่า
+  // ที่ยังไม่เคยได้รับ /update รอบใหม่) จะ fallback ไปดู log ล่าสุดแทน
+  final Timestamp? lastSeen;
 
-  const _LastUpdatedText({required this.nanoId});
+  const _LastUpdatedText({required this.nanoId, required this.lastSeen});
 
   @override
   State<_LastUpdatedText> createState() => _LastUpdatedTextState();
 }
 
 class _LastUpdatedTextState extends State<_LastUpdatedText> {
-  // แคช future ไว้ ไม่ยิง query ใหม่ทุกครั้งที่การ์ดถูก rebuild (เช่น ตอน
-  // อุปกรณ์ตัวอื่นอัปเดตค่าแล้วทั้งกริดถูก rebuild ตาม) — ยิงใหม่แค่ตอน
-  // nanoId เปลี่ยนจริงๆ เท่านั้น
-  late Future<QuerySnapshot> _future;
+  Future<Timestamp?>? _fallbackFuture;
 
   @override
   void initState() {
     super.initState();
-    _future = _fetchLatestLog();
+    if (widget.lastSeen == null) {
+      _fallbackFuture = _fetchLatestLogTimestamp();
+    }
   }
 
   @override
   void didUpdateWidget(covariant _LastUpdatedText oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.nanoId != widget.nanoId) {
-      _future = _fetchLatestLog();
+    if (widget.lastSeen != null) {
+      _fallbackFuture = null;
+    } else if (oldWidget.nanoId != widget.nanoId ||
+        oldWidget.lastSeen != null) {
+      _fallbackFuture = _fetchLatestLogTimestamp();
     }
   }
 
-  Future<QuerySnapshot> _fetchLatestLog() {
-    return FirebaseFirestore.instance
+  Future<Timestamp?> _fetchLatestLogTimestamp() async {
+    final snapshot = await FirebaseFirestore.instance
         .collection('ESP32')
         .doc(widget.nanoId)
         .collection('Logs')
         .orderBy('timestamp', descending: true)
         .limit(1)
         .get();
+
+    if (snapshot.docs.isEmpty) return null;
+    return snapshot.docs.first.data()['timestamp'] as Timestamp?;
   }
 
   String _relativeTime(DateTime time) {
@@ -1131,33 +1165,33 @@ class _LastUpdatedTextState extends State<_LastUpdatedText> {
     return "${diff.inDays} วันที่แล้ว";
   }
 
+  Widget _buildText(BuildContext context, Timestamp? ts) {
+    if (ts == null) return const SizedBox.shrink();
+
+    final color = Theme.of(context).textTheme.bodySmall?.color;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.update, size: 12, color: color),
+        const SizedBox(width: 4),
+        Text(
+          "อัปเดตล่าสุด: ${_relativeTime(ts.toDate())}",
+          style: TextStyle(fontSize: 11, color: color),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<QuerySnapshot>(
-      future: _future,
-      builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const SizedBox.shrink();
-        }
+    if (widget.lastSeen != null) {
+      return _buildText(context, widget.lastSeen);
+    }
 
-        final data = snapshot.data!.docs.first.data() as Map<String, dynamic>;
-        final ts = data['timestamp'] as Timestamp?;
-        if (ts == null) return const SizedBox.shrink();
-
-        final color = Theme.of(context).textTheme.bodySmall?.color;
-
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.update, size: 12, color: color),
-            const SizedBox(width: 4),
-            Text(
-              "อัปเดตล่าสุด: ${_relativeTime(ts.toDate())}",
-              style: TextStyle(fontSize: 11, color: color),
-            ),
-          ],
-        );
-      },
+    return FutureBuilder<Timestamp?>(
+      future: _fallbackFuture,
+      builder: (context, snapshot) => _buildText(context, snapshot.data),
     );
   }
 }
