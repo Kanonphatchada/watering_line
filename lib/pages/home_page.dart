@@ -348,28 +348,30 @@ class HomePage extends StatelessWidget {
                     avgMoisture: avgMoisture,
                   ),
                   Expanded(
-                    child: GridView.builder(
+                    // Wrap แทน GridView ตั้งใจ — GridView บังคับทุกการ์ดสูง
+                    // เท่ากันตายตัว (ต้องเดา/ขยับเลขทุกครั้งที่เนื้อหาการ์ด
+                    // เปลี่ยน) ส่วน Wrap ให้แต่ละการ์ดสูงตามเนื้อหาจริงของ
+                    // ตัวเอง กำหนดแค่ความกว้างคงที่ (420) พอ ไม่ต้องคอยขยับ
+                    // ความสูงอีกต่อไปไม่ว่าจะเพิ่มอะไรในการ์ดทีหลัง
+                    child: SingleChildScrollView(
                       padding: const EdgeInsets.symmetric(vertical: 8),
-                      gridDelegate:
-                          const SliverGridDelegateWithMaxCrossAxisExtent(
-                        maxCrossAxisExtent: 420,
-                        // 440 เดิม + ที่ว่างสำหรับ sparkline ที่เพิ่มเข้ามาใหม่
-                        // (สูง 36 + spacing รอบข้าง 24) กันการ์ด overflow
-                        mainAxisExtent: 500,
-                        mainAxisSpacing: 16,
-                        crossAxisSpacing: 16,
-                      ),
-                      itemCount: docs.length,
-                      itemBuilder: (context, index) {
-                        final doc = docs[index];
-                        final data = doc.data() as Map<String, dynamic>;
+                      child: Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 16,
+                        runSpacing: 16,
+                        children: docs.map((doc) {
+                          final data = doc.data() as Map<String, dynamic>;
 
-                        return _DeviceCard(
-                          key: ValueKey(doc.id),
-                          nanoId: doc.id,
-                          data: data,
-                        );
-                      },
+                          return SizedBox(
+                            width: 420,
+                            child: _DeviceCard(
+                              key: ValueKey(doc.id),
+                              nanoId: doc.id,
+                              data: data,
+                            ),
+                          );
+                        }).toList(),
+                      ),
                     ),
                   ),
                 ],
