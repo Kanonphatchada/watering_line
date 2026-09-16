@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'dart:html' as html;
+import '../web_utils.dart';
 import 'home_page.dart';
 
 class LoginPage extends StatefulWidget {
@@ -41,7 +41,7 @@ class _LoginPageState extends State<LoginPage> {
           await user?.updatePhotoURL(photoUrl);
         }
 
-        html.window.history.replaceState(null, '', '/');
+        clearUrlQueryParams();
 
         Navigator.pushReplacement(
           context,

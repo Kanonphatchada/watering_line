@@ -3,7 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:html' as html;
+import 'web_utils.dart';
 import 'firebase_options.dart';
 import 'pages/login_page.dart';
 import 'pages/home_page.dart';
@@ -246,14 +246,23 @@ class _MyAppState extends State<MyApp> {
         final uid = FirebaseAuth.instance.currentUser?.uid;
         print("🔥 LOGIN UID = $uid");
 
-        html.window.history.replaceState(null, '', '/');
+        clearUrlQueryParams();
       } catch (e) {
         print("❌ LOGIN ERROR = $e");
       }
+    } else {
+      // 🔥 รอ Firebase restore session ที่เคย login ค้างไว้จริงๆ (แทนการเดา
+      // ด้วย delay คงที่ ซึ่งถ้าเน็ต/เครื่องช้ากว่านั้นจะโดนเด้งออกจากระบบ
+      // ทั้งที่จริงๆ ยัง login ค้างอยู่)
+      try {
+        await FirebaseAuth.instance
+            .authStateChanges()
+            .first
+            .timeout(const Duration(seconds: 5));
+      } catch (e) {
+        print("⚠️ ตรวจสอบสถานะ login ไม่ทันเวลา: $e");
+      }
     }
-
-    // 🔥 รอ Firebase restore session
-    await Future.delayed(const Duration(milliseconds: 500));
 
     setState(() {
       isLoading = false;
@@ -286,7 +295,7 @@ class _MyAppState extends State<MyApp> {
                   ),
                   const SizedBox(height: 20),
                   ElevatedButton.icon(
-                    onPressed: () => html.window.location.reload(),
+                    onPressed: () => reloadPage(),
                     icon: const Icon(Icons.refresh),
                     label: const Text("ลองใหม่"),
                   ),

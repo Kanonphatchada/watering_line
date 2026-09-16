@@ -26,44 +26,56 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   Future<void> loadData() async {
-    final doc = await FirebaseFirestore.instance
-        .collection('ESP32')
-        .doc(widget.nanoId) // 🔥 ใช้ nanoId จริง
-        .get();
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('ESP32')
+          .doc(widget.nanoId) // 🔥 ใช้ nanoId จริง
+          .get();
 
-    final data = doc.data();
-
-    if (data != null && data['Automois'] != null) {
-      targetMoisture = (data['Automois'] as num).toDouble();
-    }
-
-    final now = DateTime.now();
-    final past30 = now.subtract(const Duration(days: 30));
-
-    final logs = await FirebaseFirestore.instance
-        .collection('ESP32')
-        .doc(widget.nanoId)
-        .collection('Logs')
-        .where('timestamp', isGreaterThan: past30)
-        .orderBy('timestamp', descending: true)
-        // กันเผื่ออุปกรณ์บันทึกถี่มาก ไม่ให้โหลดเอกสารไม่จำกัดจำนวน
-        .limit(2000)
-        .get();
-
-    for (var doc in logs.docs) {
       final data = doc.data();
 
-      final ts = (data['timestamp'] as Timestamp).toDate();
-      final moisture = (data['moisture'] as num).toDouble();
+      if (data != null && data['Automois'] != null) {
+        targetMoisture = (data['Automois'] as num).toDouble();
+      }
 
-      final day = DateTime(ts.year, ts.month, ts.day);
-      // เรียงจากใหม่ไปเก่า และเก็บแค่ค่าแรกที่เจอของแต่ละวัน (ค่าล่าสุดของวันนั้น)
-      moisturePerDay.putIfAbsent(day, () => moisture);
+      final now = DateTime.now();
+      final past30 = now.subtract(const Duration(days: 30));
+
+      final logs = await FirebaseFirestore.instance
+          .collection('ESP32')
+          .doc(widget.nanoId)
+          .collection('Logs')
+          .where('timestamp', isGreaterThan: past30)
+          .orderBy('timestamp', descending: true)
+          // กันเผื่ออุปกรณ์บันทึกถี่มาก ไม่ให้โหลดเอกสารไม่จำกัดจำนวน
+          .limit(2000)
+          .get();
+
+      for (var doc in logs.docs) {
+        final data = doc.data();
+
+        final rawTimestamp = data['timestamp'];
+        final rawMoisture = data['moisture'];
+        // ข้าม log ที่ข้อมูลไม่ครบ (เช่น firmware เขียนกลางคัน) กันไม่ให้
+        // ทั้งหน้าค้างที่ loading เพราะ log เดียวพัง
+        if (rawTimestamp is! Timestamp || rawMoisture is! num) {
+          continue;
+        }
+
+        final ts = rawTimestamp.toDate();
+        final moisture = rawMoisture.toDouble();
+
+        final day = DateTime(ts.year, ts.month, ts.day);
+        // เรียงจากใหม่ไปเก่า และเก็บแค่ค่าแรกที่เจอของแต่ละวัน (ค่าล่าสุดของวันนั้น)
+        moisturePerDay.putIfAbsent(day, () => moisture);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
     }
-
-    setState(() {
-      isLoading = false;
-    });
   }
 
   // สถานะ + สีของความชื้นวันนั้น เทียบกับค่าที่กำหนด ใช้ร่วมกันทั้ง

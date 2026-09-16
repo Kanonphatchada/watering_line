@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'calendar_page.dart';
 import 'graph_page.dart';
 import 'notification_history_page.dart';
@@ -268,7 +269,6 @@ class HomePage extends StatelessWidget {
         stream: FirebaseFirestore.instance
             .collection('ESP32')
             .where('uid', isEqualTo: uid)
-            .orderBy(FieldPath.documentId)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
@@ -427,6 +427,9 @@ class _DeviceCardState extends State<_DeviceCard> {
     final moisture = (data['Moisture'] ?? 0).toDouble();
     final automois = (data['Automois'] ?? 20).toDouble();
     final isAlert = moisture > automois;
+    final isOffline = data['offline'] == true;
+    final faultType = data['faultType'] as String?;
+    final hasValveFault = !isOffline && faultType != null;
 
     return Card(
       child: Padding(
@@ -442,12 +445,25 @@ class _DeviceCardState extends State<_DeviceCard> {
                   height: 44,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color:
-                        isAlert ? Colors.red.shade50 : const Color(0xFFE8F5E9),
+                    color: isOffline
+                        ? Colors.grey.shade200
+                        : (hasValveFault
+                            ? Colors.orange.shade50
+                            : (isAlert
+                                ? Colors.red.shade50
+                                : const Color(0xFFE8F5E9))),
                   ),
                   child: Icon(
-                    Icons.water_drop,
-                    color: isAlert ? Colors.red : const Color(0xFF2E7D32),
+                    isOffline
+                        ? Icons.cloud_off
+                        : (hasValveFault
+                            ? Icons.report_problem_outlined
+                            : Icons.water_drop),
+                    color: isOffline
+                        ? Colors.grey.shade600
+                        : (hasValveFault
+                            ? Colors.orange.shade800
+                            : (isAlert ? Colors.red : const Color(0xFF2E7D32))),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -475,10 +491,16 @@ class _DeviceCardState extends State<_DeviceCard> {
                     ],
                   ),
                 ),
-                _StatusChip(isAlert: isAlert),
+                _StatusChip(
+                  isAlert: isAlert,
+                  isOffline: isOffline,
+                  faultType: faultType,
+                ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
+            _MoistureSparkline(nanoId: nanoId),
+            const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               decoration: BoxDecoration(
@@ -491,10 +513,10 @@ class _DeviceCardState extends State<_DeviceCard> {
               child: Row(
                 children: [
                   Expanded(
-                    child: _StatTile(
-                      icon: Icons.water_drop,
-                      label: "Moisture",
-                      value: "${data['Moisture']}",
+                    child: _MoistureGauge(
+                      moisture: data['Moisture'] as num?,
+                      target: currentTarget,
+                      isOffline: isOffline,
                     ),
                   ),
                   const _StatDivider(),
@@ -510,7 +532,7 @@ class _DeviceCardState extends State<_DeviceCard> {
                     child: _StatTile(
                       icon: Icons.schedule,
                       label: "Time",
-                      value: "${data['Time']}",
+                      value: "${data['Time'] ?? '-'}",
                     ),
                   ),
                 ],
@@ -547,8 +569,10 @@ class _DeviceCardState extends State<_DeviceCard> {
                           .doc(nanoId)
                           .update({
                         'Valve': val,
+                        // เปิด Valve มือ = ปิด Auto กันชนกัน แต่ปิด Valve ไม่ควร
+                        // ไปเปิด Auto กลับให้เอง เพราะผู้ใช้อาจตั้งใจแค่จะหยุด
+                        // รดน้ำ ไม่ได้ต้องการให้ระบบตัดสินใจเปิดวาล์วเองอีก
                         if (val == true) 'Auto': false,
-                        if (val == false) 'Auto': true,
                       });
                     },
                   ),
@@ -785,33 +809,59 @@ class _KpiCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      clipBehavior: Clip.antiAlias,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: iconColor.withValues(alpha: 0.12),
-              ),
-              child: Icon(icon, size: 18, color: iconColor),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              value,
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 20),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(context).textTheme.bodySmall?.color,
+            // แถบสีบอกตัวตนของการ์ดตั้งแต่แรกเห็น ผูกทั้งการ์ดเข้ากับสีของ
+            // ไอคอน แทนที่จะปล่อยให้ไอคอนลอยเดี่ยวๆ เหนือค่าตัวเลข
+            Container(width: 4, color: iconColor),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: iconColor.withValues(alpha: 0.14),
+                          ),
+                          child: Icon(icon, size: 16, color: iconColor),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color:
+                                  Theme.of(context).textTheme.bodySmall?.color,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      value,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 26,
+                        height: 1,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -823,12 +873,44 @@ class _KpiCard extends StatelessWidget {
 
 class _StatusChip extends StatelessWidget {
   final bool isAlert;
+  final bool isOffline;
+  final String? faultType;
 
-  const _StatusChip({required this.isAlert});
+  const _StatusChip({
+    required this.isAlert,
+    this.isOffline = false,
+    this.faultType,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final color = isAlert ? Colors.red : Colors.green;
+    final hasValveFault = !isOffline && faultType != null;
+
+    // ลำดับความสำคัญ: ขาดการติดต่อ > วาล์วผิดปกติ > ความชื้นเกิน > ปกติ
+    // เพราะค่าที่โชว์อยู่อาจเป็นค่าเก่าที่ค้างมาจากก่อนจะเกิดปัญหา
+    final Color color;
+    final IconData icon;
+    final String label;
+
+    if (isOffline) {
+      color = Colors.grey.shade600;
+      icon = Icons.cloud_off;
+      label = "ขาดการติดต่อ";
+    } else if (hasValveFault) {
+      color = Colors.orange.shade800;
+      icon = Icons.report_problem_outlined;
+      label = faultType == "valve_stuck_open"
+          ? "วาล์วค้างเปิด"
+          : "วาล์วอาจไม่ทำงาน";
+    } else if (isAlert) {
+      color = Colors.red;
+      icon = Icons.warning_amber_rounded;
+      label = "แจ้งเตือน";
+    } else {
+      color = Colors.green;
+      icon = Icons.check_circle;
+      label = "ปกติ";
+    }
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
@@ -840,14 +922,10 @@ class _StatusChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            isAlert ? Icons.warning_amber_rounded : Icons.check_circle,
-            size: 16,
-            color: color,
-          ),
+          Icon(icon, size: 16, color: color),
           const SizedBox(width: 4),
           Text(
-            isAlert ? "แจ้งเตือน" : "ปกติ",
+            label,
             style: TextStyle(
               color: color,
               fontWeight: FontWeight.bold,
@@ -1006,10 +1084,44 @@ class _ActionButton extends StatelessWidget {
   }
 }
 
-class _LastUpdatedText extends StatelessWidget {
+class _LastUpdatedText extends StatefulWidget {
   final String nanoId;
 
   const _LastUpdatedText({required this.nanoId});
+
+  @override
+  State<_LastUpdatedText> createState() => _LastUpdatedTextState();
+}
+
+class _LastUpdatedTextState extends State<_LastUpdatedText> {
+  // แคช future ไว้ ไม่ยิง query ใหม่ทุกครั้งที่การ์ดถูก rebuild (เช่น ตอน
+  // อุปกรณ์ตัวอื่นอัปเดตค่าแล้วทั้งกริดถูก rebuild ตาม) — ยิงใหม่แค่ตอน
+  // nanoId เปลี่ยนจริงๆ เท่านั้น
+  late Future<QuerySnapshot> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _fetchLatestLog();
+  }
+
+  @override
+  void didUpdateWidget(covariant _LastUpdatedText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.nanoId != widget.nanoId) {
+      _future = _fetchLatestLog();
+    }
+  }
+
+  Future<QuerySnapshot> _fetchLatestLog() {
+    return FirebaseFirestore.instance
+        .collection('ESP32')
+        .doc(widget.nanoId)
+        .collection('Logs')
+        .orderBy('timestamp', descending: true)
+        .limit(1)
+        .get();
+  }
 
   String _relativeTime(DateTime time) {
     final diff = DateTime.now().difference(time);
@@ -1022,13 +1134,7 @@ class _LastUpdatedText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<QuerySnapshot>(
-      future: FirebaseFirestore.instance
-          .collection('ESP32')
-          .doc(nanoId)
-          .collection('Logs')
-          .orderBy('timestamp', descending: true)
-          .limit(1)
-          .get(),
+      future: _future,
       builder: (context, snapshot) {
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return const SizedBox.shrink();
@@ -1052,6 +1158,160 @@ class _LastUpdatedText extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _MoistureGauge extends StatelessWidget {
+  final num? moisture;
+  final double target;
+  final bool isOffline;
+
+  const _MoistureGauge({
+    required this.moisture,
+    required this.target,
+    required this.isOffline,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final value = moisture?.toDouble();
+    final isAlert = value != null && value > target;
+    final color = isOffline
+        ? Colors.grey.shade500
+        : (isAlert ? Colors.red : const Color(0xFF2E7D32));
+    final ratio =
+        (value == null || target <= 0) ? 0.0 : (value / target).clamp(0.0, 1.0);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 40,
+          height: 40,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              CircularProgressIndicator(
+                value: value == null ? 0 : ratio,
+                strokeWidth: 4,
+                backgroundColor: color.withValues(alpha: 0.15),
+                valueColor: AlwaysStoppedAnimation<Color>(color),
+              ),
+              Text(
+                value == null ? '-' : value.toStringAsFixed(0),
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          "Moisture",
+          style: TextStyle(
+            fontSize: 11,
+            color: Theme.of(context).textTheme.bodySmall?.color,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MoistureSparkline extends StatefulWidget {
+  final String nanoId;
+
+  const _MoistureSparkline({required this.nanoId});
+
+  @override
+  State<_MoistureSparkline> createState() => _MoistureSparklineState();
+}
+
+class _MoistureSparklineState extends State<_MoistureSparkline> {
+  // แคช future ไว้เหมือน _LastUpdatedText กันยิง query ใหม่ทุกครั้งที่การ์ด
+  // rebuild ตามอุปกรณ์ตัวอื่นในกริด
+  late Future<List<FlSpot>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _fetchRecentReadings();
+  }
+
+  @override
+  void didUpdateWidget(covariant _MoistureSparkline oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.nanoId != widget.nanoId) {
+      _future = _fetchRecentReadings();
+    }
+  }
+
+  Future<List<FlSpot>> _fetchRecentReadings() async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('ESP32')
+        .doc(widget.nanoId)
+        .collection('Logs')
+        .orderBy('timestamp', descending: true)
+        .limit(12)
+        .get();
+
+    final points = snapshot.docs.reversed
+        .map((doc) => doc.data()['moisture'])
+        .whereType<num>()
+        .toList();
+
+    return [
+      for (var i = 0; i < points.length; i++)
+        FlSpot(i.toDouble(), points[i].toDouble()),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 36,
+      child: FutureBuilder<List<FlSpot>>(
+        future: _future,
+        builder: (context, snapshot) {
+          final spots = snapshot.data;
+          if (spots == null || spots.length < 2) {
+            return const SizedBox.shrink(); // ยังไม่มีข้อมูลพอวาดกราฟ
+          }
+
+          final ys = spots.map((s) => s.y);
+          final minY = ys.reduce((a, b) => a < b ? a : b);
+          final maxY = ys.reduce((a, b) => a > b ? a : b);
+          final pad = (maxY - minY) * 0.15;
+
+          return LineChart(
+            LineChartData(
+              minY: minY - pad - 1,
+              maxY: maxY + pad + 1,
+              gridData: const FlGridData(show: false),
+              titlesData: const FlTitlesData(show: false),
+              borderData: FlBorderData(show: false),
+              lineTouchData: const LineTouchData(enabled: false),
+              lineBarsData: [
+                LineChartBarData(
+                  spots: spots,
+                  isCurved: true,
+                  color: const Color(0xFF2E7D32),
+                  barWidth: 2,
+                  dotData: const FlDotData(show: false),
+                  belowBarData: BarAreaData(
+                    show: true,
+                    color: const Color(0xFF2E7D32).withValues(alpha: 0.08),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }

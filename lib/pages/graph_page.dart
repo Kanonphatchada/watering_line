@@ -28,50 +28,59 @@ class _GraphPageState extends State<GraphPage> {
   }
 
   Future<void> loadData() async {
-    // 🔥 โหลด target
-    final doc = await FirebaseFirestore.instance
-        .collection('ESP32')
-        .doc(widget.nanoId)
-        .get();
+    try {
+      // 🔥 โหลด target
+      final doc = await FirebaseFirestore.instance
+          .collection('ESP32')
+          .doc(widget.nanoId)
+          .get();
 
-    final data = doc.data();
-    if (data != null && data['Automois'] != null) {
-      targetMoisture = (data['Automois'] as num).toDouble();
-    }
-
-    // 🔥 โหลด logs (แสดงแค่ 30 รายการล่าสุด ไม่ให้กราฟรกเกินไป)
-    final logs = await FirebaseFirestore.instance
-        .collection('ESP32')
-        .doc(widget.nanoId)
-        .collection('Logs')
-        .orderBy('timestamp')
-        .limitToLast(30)
-        .get();
-
-    int index = 0;
-    spots.clear();
-
-    for (var doc in logs.docs) {
       final data = doc.data();
-      final moisture = (data['moisture'] as num).toDouble();
+      if (data != null && data['Automois'] != null) {
+        targetMoisture = (data['Automois'] as num).toDouble();
+      }
 
-      spots.add(FlSpot(index.toDouble(), moisture));
-      index++;
+      // 🔥 โหลด logs (แสดงแค่ 30 รายการล่าสุด ไม่ให้กราฟรกเกินไป)
+      final logs = await FirebaseFirestore.instance
+          .collection('ESP32')
+          .doc(widget.nanoId)
+          .collection('Logs')
+          .orderBy('timestamp')
+          .limitToLast(30)
+          .get();
+
+      int index = 0;
+      spots.clear();
+
+      for (var doc in logs.docs) {
+        final data = doc.data();
+        final rawMoisture = data['moisture'];
+        // ข้าม log ที่ไม่มีค่า moisture (เช่น firmware เขียนกลางคัน) กันไม่ให้
+        // ทั้งหน้าค้างที่ loading เพราะ log เดียวพัง
+        if (rawMoisture is! num) {
+          continue;
+        }
+
+        spots.add(FlSpot(index.toDouble(), rawMoisture.toDouble()));
+        index++;
+      }
+
+      // 🔥 ป้องกัน crash ถ้าไม่มีข้อมูล และรวมเส้นค่าที่กำหนดไว้ในช่วงแกน Y ด้วย
+      // เพื่อไม่ให้เส้นประหลุดจากพื้นที่กราฟ
+      final values = [...spots.map((e) => e.y), targetMoisture];
+      final lowest = values.reduce((a, b) => a < b ? a : b);
+      final highest = values.reduce((a, b) => a > b ? a : b);
+
+      // ความชื้นไม่ควรติดลบ เลยยึดขอบล่างไว้ที่ 0 เป็นอย่างน้อย
+      minY = lowest - 5 < 0 ? 0 : lowest - 5;
+      maxY = highest + 5;
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
     }
-
-    // 🔥 ป้องกัน crash ถ้าไม่มีข้อมูล และรวมเส้นค่าที่กำหนดไว้ในช่วงแกน Y ด้วย
-    // เพื่อไม่ให้เส้นประหลุดจากพื้นที่กราฟ
-    final values = [...spots.map((e) => e.y), targetMoisture];
-    final lowest = values.reduce((a, b) => a < b ? a : b);
-    final highest = values.reduce((a, b) => a > b ? a : b);
-
-    // ความชื้นไม่ควรติดลบ เลยยึดขอบล่างไว้ที่ 0 เป็นอย่างน้อย
-    minY = lowest - 5 < 0 ? 0 : lowest - 5;
-    maxY = highest + 5;
-
-    setState(() {
-      isLoading = false;
-    });
   }
 
   // เลือกระยะห่างของเส้นกริด/ป้ายแกน Y ให้เป็นตัวเลขกลมๆ (1, 2, 5, 10, 20, 50, ...)

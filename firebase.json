@@ -25,7 +25,7 @@
 
   "functions": [
     {
-      "source": "functions",
+      "source": "cloud_functions",
       "codebase": "default",
       "ignore": [
         "node_modules",
