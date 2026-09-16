@@ -246,7 +246,9 @@ class _MyAppState extends State<MyApp> {
         final uid = FirebaseAuth.instance.currentUser?.uid;
         print("🔥 LOGIN UID = $uid");
 
-        clearUrlQueryParams();
+        // หน่วงไว้สักพักก่อนลบ token ออกจาก URL ให้พอมีเวลา copy ไปทดสอบที่
+        // localhost ได้ทัน (เช่น ตอน dev ทดสอบ auth แบบ manual)
+        Future.delayed(const Duration(seconds: 15), clearUrlQueryParams);
       } catch (e) {
         print("❌ LOGIN ERROR = $e");
       }
