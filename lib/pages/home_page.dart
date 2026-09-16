@@ -348,30 +348,26 @@ class HomePage extends StatelessWidget {
                     avgMoisture: avgMoisture,
                   ),
                   Expanded(
-                    // Wrap แทน GridView ตั้งใจ — GridView บังคับทุกการ์ดสูง
-                    // เท่ากันตายตัว (ต้องเดา/ขยับเลขทุกครั้งที่เนื้อหาการ์ด
-                    // เปลี่ยน) ส่วน Wrap ให้แต่ละการ์ดสูงตามเนื้อหาจริงของ
-                    // ตัวเอง กำหนดแค่ความกว้างคงที่ (420) พอ ไม่ต้องคอยขยับ
-                    // ความสูงอีกต่อไปไม่ว่าจะเพิ่มอะไรในการ์ดทีหลัง
-                    child: SingleChildScrollView(
+                    child: GridView.builder(
                       padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Wrap(
-                        alignment: WrapAlignment.center,
-                        spacing: 16,
-                        runSpacing: 16,
-                        children: docs.map((doc) {
-                          final data = doc.data() as Map<String, dynamic>;
-
-                          return SizedBox(
-                            width: 420,
-                            child: _DeviceCard(
-                              key: ValueKey(doc.id),
-                              nanoId: doc.id,
-                              data: data,
-                            ),
-                          );
-                        }).toList(),
+                      gridDelegate:
+                          const SliverGridDelegateWithMaxCrossAxisExtent(
+                        maxCrossAxisExtent: 420,
+                        mainAxisExtent: 480,
+                        mainAxisSpacing: 16,
+                        crossAxisSpacing: 16,
                       ),
+                      itemCount: docs.length,
+                      itemBuilder: (context, index) {
+                        final doc = docs[index];
+                        final data = doc.data() as Map<String, dynamic>;
+
+                        return _DeviceCard(
+                          key: ValueKey(doc.id),
+                          nanoId: doc.id,
+                          data: data,
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -438,294 +434,304 @@ class _DeviceCardState extends State<_DeviceCard> {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isOffline
-                        ? Colors.grey.shade200
-                        : (hasValveFault
-                            ? Colors.orange.shade50
-                            : (isAlert
-                                ? Colors.red.shade50
-                                : const Color(0xFFE8F5E9))),
+        // การ์ดทุกใบสูงเท่ากันตายตัว (กำหนดจาก GridView) — ห่อด้วย
+        // SingleChildScrollView กันไว้ ถ้าเนื้อหาในอนาคตยาวเกินพื้นที่การ์ด
+        // จะแค่ scroll ข้างในการ์ดเอง ไม่มีทาง overflow ล้นออกมาอีก
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isOffline
+                          ? Colors.grey.shade200
+                          : (hasValveFault
+                              ? Colors.orange.shade50
+                              : (isAlert
+                                  ? Colors.red.shade50
+                                  : const Color(0xFFE8F5E9))),
+                    ),
+                    child: Icon(
+                      isOffline
+                          ? Icons.cloud_off
+                          : (hasValveFault
+                              ? Icons.report_problem_outlined
+                              : Icons.water_drop),
+                      color: isOffline
+                          ? Colors.grey.shade600
+                          : (hasValveFault
+                              ? Colors.orange.shade800
+                              : (isAlert
+                                  ? Colors.red
+                                  : const Color(0xFF2E7D32))),
+                    ),
                   ),
-                  child: Icon(
-                    isOffline
-                        ? Icons.cloud_off
-                        : (hasValveFault
-                            ? Icons.report_problem_outlined
-                            : Icons.water_drop),
-                    color: isOffline
-                        ? Colors.grey.shade600
-                        : (hasValveFault
-                            ? Colors.orange.shade800
-                            : (isAlert ? Colors.red : const Color(0xFF2E7D32))),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        nanoId,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      if (data['groupId'] != null)
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                          "กลุ่ม: ${data['groupId']}",
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Theme.of(context).textTheme.bodySmall?.color,
+                          nanoId,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                      const SizedBox(height: 2),
-                      _LastUpdatedText(
-                        nanoId: nanoId,
-                        lastSeen: data['lastSeen'] as Timestamp?,
-                      ),
-                    ],
-                  ),
-                ),
-                _StatusChip(
-                  isAlert: isAlert,
-                  isOffline: isOffline,
-                  faultType: faultType,
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _MoistureSparkline(nanoId: nanoId),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              decoration: BoxDecoration(
-                color: Theme.of(context)
-                    .colorScheme
-                    .surfaceContainerHighest
-                    .withValues(alpha: 0.4),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _MoistureGauge(
-                      moisture: data['Moisture'] as num?,
-                      target: currentTarget,
-                      isOffline: isOffline,
-                    ),
-                  ),
-                  const _StatDivider(),
-                  Expanded(
-                    child: _StatTile(
-                      icon: Icons.flag,
-                      label: "Target",
-                      value: currentTarget.toString(),
-                    ),
-                  ),
-                  const _StatDivider(),
-                  Expanded(
-                    child: _StatTile(
-                      icon: Icons.schedule,
-                      label: "Time",
-                      value: "${data['Time'] ?? '-'}",
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: _ControlChip(
-                    label: "Auto",
-                    icon: Icons.auto_mode,
-                    value: data['Auto'] ?? false,
-                    onChanged: (val) async {
-                      await FirebaseFirestore.instance
-                          .collection('ESP32')
-                          .doc(nanoId)
-                          .update({
-                        'Auto': val,
-                        if (val == true) 'Valve': false,
-                      });
-                    },
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _ControlChip(
-                    label: "Valve",
-                    icon: Icons.water,
-                    value: data['Valve'] ?? false,
-                    onChanged: (val) async {
-                      await FirebaseFirestore.instance
-                          .collection('ESP32')
-                          .doc(nanoId)
-                          .update({
-                        'Valve': val,
-                        // เปิด Valve มือ = ปิด Auto กันชนกัน แต่ปิด Valve ไม่ควร
-                        // ไปเปิด Auto กลับให้เอง เพราะผู้ใช้อาจตั้งใจแค่จะหยุด
-                        // รดน้ำ ไม่ได้ต้องการให้ระบบตัดสินใจเปิดวาล์วเองอีก
-                        if (val == true) 'Auto': false,
-                      });
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Theme.of(context).dividerColor,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.tune,
-                      size: 18,
-                      color: Theme.of(context).textTheme.bodySmall?.color),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text(
-                      "ตั้งค่าความชื้น",
-                      style: TextStyle(fontSize: 13),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 70,
-                    child: TextField(
-                      controller: _controller,
-                      focusNode: _focusNode,
-                      keyboardType: TextInputType.number,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 13),
-                      decoration: const InputDecoration(
-                        isDense: true,
-                        contentPadding: EdgeInsets.symmetric(vertical: 8),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    height: 36,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                      ),
-                      onPressed: () async {
-                        final newValue = double.tryParse(_controller.text);
-
-                        if (newValue != null) {
-                          await FirebaseFirestore.instance
-                              .collection('ESP32')
-                              .doc(nanoId)
-                              .update({
-                            'Automois': newValue,
-                          });
-
-                          if (!context.mounted) return;
-
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              behavior: SnackBarBehavior.floating,
-                              backgroundColor: const Color(0xFF2E7D32),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              margin: const EdgeInsets.all(16),
-                              content: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.check_circle,
-                                      color: Colors.white, size: 20),
-                                  SizedBox(width: 10),
-                                  Text(
-                                    "อัปเดตค่าความชื้นแล้ว",
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                        if (data['groupId'] != null)
+                          Text(
+                            "กลุ่ม: ${data['groupId']}",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color:
+                                  Theme.of(context).textTheme.bodySmall?.color,
                             ),
-                          );
-                        }
+                          ),
+                        const SizedBox(height: 2),
+                        _LastUpdatedText(
+                          nanoId: nanoId,
+                          lastSeen: data['lastSeen'] as Timestamp?,
+                        ),
+                      ],
+                    ),
+                  ),
+                  _StatusChip(
+                    isAlert: isAlert,
+                    isOffline: isOffline,
+                    faultType: faultType,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _MoistureSparkline(nanoId: nanoId),
+              const SizedBox(height: 12),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .surfaceContainerHighest
+                      .withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _MoistureGauge(
+                        moisture: data['Moisture'] as num?,
+                        target: currentTarget,
+                        isOffline: isOffline,
+                      ),
+                    ),
+                    const _StatDivider(),
+                    Expanded(
+                      child: _StatTile(
+                        icon: Icons.flag,
+                        label: "Target",
+                        value: currentTarget.toString(),
+                      ),
+                    ),
+                    const _StatDivider(),
+                    Expanded(
+                      child: _StatTile(
+                        icon: Icons.schedule,
+                        label: "Time",
+                        value: "${data['Time'] ?? '-'}",
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: _ControlChip(
+                      label: "Auto",
+                      icon: Icons.auto_mode,
+                      value: data['Auto'] ?? false,
+                      onChanged: (val) async {
+                        await FirebaseFirestore.instance
+                            .collection('ESP32')
+                            .doc(nanoId)
+                            .update({
+                          'Auto': val,
+                          if (val == true) 'Valve': false,
+                        });
                       },
-                      child: const Text("บันทึก"),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _ControlChip(
+                      label: "Valve",
+                      icon: Icons.water,
+                      value: data['Valve'] ?? false,
+                      onChanged: (val) async {
+                        await FirebaseFirestore.instance
+                            .collection('ESP32')
+                            .doc(nanoId)
+                            .update({
+                          'Valve': val,
+                          // เปิด Valve มือ = ปิด Auto กันชนกัน แต่ปิด Valve ไม่ควร
+                          // ไปเปิด Auto กลับให้เอง เพราะผู้ใช้อาจตั้งใจแค่จะหยุด
+                          // รดน้ำ ไม่ได้ต้องการให้ระบบตัดสินใจเปิดวาล์วเองอีก
+                          if (val == true) 'Auto': false,
+                        });
+                      },
                     ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 14),
-            const Divider(height: 1),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: _ActionButton(
-                    icon: Icons.calendar_month,
-                    label: "Calendar",
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => CalendarPage(nanoId: nanoId),
-                        ),
-                      );
-                    },
+              const SizedBox(height: 14),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Theme.of(context).dividerColor,
                   ),
                 ),
-                Expanded(
-                  child: _ActionButton(
-                    icon: Icons.show_chart,
-                    label: "Graph",
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => GraphPage(nanoId: nanoId),
+                child: Row(
+                  children: [
+                    Icon(Icons.tune,
+                        size: 18,
+                        color: Theme.of(context).textTheme.bodySmall?.color),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        "ตั้งค่าความชื้น",
+                        style: TextStyle(fontSize: 13),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 70,
+                      child: TextField(
+                        controller: _controller,
+                        focusNode: _focusNode,
+                        keyboardType: TextInputType.number,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 13),
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          contentPadding: EdgeInsets.symmetric(vertical: 8),
                         ),
-                      );
-                    },
-                  ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      height: 36,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                        ),
+                        onPressed: () async {
+                          final newValue = double.tryParse(_controller.text);
+
+                          if (newValue != null) {
+                            await FirebaseFirestore.instance
+                                .collection('ESP32')
+                                .doc(nanoId)
+                                .update({
+                              'Automois': newValue,
+                            });
+
+                            if (!context.mounted) return;
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                behavior: SnackBarBehavior.floating,
+                                backgroundColor: const Color(0xFF2E7D32),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                margin: const EdgeInsets.all(16),
+                                content: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.check_circle,
+                                        color: Colors.white, size: 20),
+                                    SizedBox(width: 10),
+                                    Text(
+                                      "อัปเดตค่าความชื้นแล้ว",
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                        child: const Text("บันทึก"),
+                      ),
+                    ),
+                  ],
                 ),
-                Expanded(
-                  child: _ActionButton(
-                    icon: Icons.notifications_outlined,
-                    label: "History",
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => NotificationHistoryPage(
-                            nanoId: nanoId,
+              ),
+              const SizedBox(height: 14),
+              const Divider(height: 1),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _ActionButton(
+                      icon: Icons.calendar_month,
+                      label: "Calendar",
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => CalendarPage(nanoId: nanoId),
                           ),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ],
+                  Expanded(
+                    child: _ActionButton(
+                      icon: Icons.show_chart,
+                      label: "Graph",
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => GraphPage(nanoId: nanoId),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  Expanded(
+                    child: _ActionButton(
+                      icon: Icons.notifications_outlined,
+                      label: "History",
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => NotificationHistoryPage(
+                              nanoId: nanoId,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1308,22 +1314,29 @@ class _MoistureSparklineState extends State<_MoistureSparkline> {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 36,
-      child: FutureBuilder<List<FlSpot>>(
-        future: _future,
-        builder: (context, snapshot) {
-          final spots = snapshot.data;
-          if (spots == null || spots.length < 2) {
-            return const SizedBox.shrink(); // ยังไม่มีข้อมูลพอวาดกราฟ
-          }
+    return FutureBuilder<List<FlSpot>>(
+      future: _future,
+      builder: (context, snapshot) {
+        final spots = snapshot.data;
+        if (spots == null || spots.length < 2) {
+          return const SizedBox.shrink(); // ยังไม่มีข้อมูลพอวาดกราฟ
+        }
 
-          final ys = spots.map((s) => s.y);
-          final minY = ys.reduce((a, b) => a < b ? a : b);
-          final maxY = ys.reduce((a, b) => a > b ? a : b);
-          final pad = (maxY - minY) * 0.15;
+        final ys = spots.map((s) => s.y);
+        final minY = ys.reduce((a, b) => a < b ? a : b);
+        final maxY = ys.reduce((a, b) => a > b ? a : b);
+        final pad = (maxY - minY) * 0.15;
 
-          return LineChart(
+        // กรอบตายตัวรอบกราฟ (ความสูงคงที่เสมอ ไม่ขยับตามข้อมูล) — แกน Y
+        // ข้างในปรับสเกลเข้าหาข้อมูลเอง กราฟเลยไม่มีทาง "โต" จนล้นกรอบนี้
+        return Container(
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            border: Border.all(color: Theme.of(context).dividerColor),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: LineChart(
             LineChartData(
               minY: minY - pad - 1,
               maxY: maxY + pad + 1,
@@ -1345,9 +1358,9 @@ class _MoistureSparklineState extends State<_MoistureSparkline> {
                 ),
               ],
             ),
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 }
