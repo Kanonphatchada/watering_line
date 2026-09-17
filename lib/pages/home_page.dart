@@ -14,8 +14,17 @@ import '../widgets/avatar.dart';
 import 'login_page.dart';
 import '../main.dart';
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  // กันไม่ให้ popup แจ้งเตือนอุปกรณ์มีปัญหาเด้งซ้ำทุกครั้งที่ stream ยิง
+  // ค่าใหม่มา — โชว์แค่ครั้งเดียวต่อการเปิดหน้านี้หนึ่งรอบ
+  bool _alertShown = false;
 
   @override
   Widget build(BuildContext context) {
@@ -336,6 +345,61 @@ class HomePage extends StatelessWidget {
             if (moisture > automois) alertCount++;
           }
           final avgMoisture = moistureSum / docs.length;
+
+          // เด้ง popup สรุปอุปกรณ์ที่มีปัญหาอยู่ตอนนี้ทันทีที่เข้าหน้านี้ —
+          // แค่ครั้งเดียวต่อการเปิดหน้า ไม่เด้งซ้ำทุกครั้งที่ stream อัปเดต
+          final problems = <(String nanoId, String label)>[
+            for (final doc in docs)
+              if ((doc.data() as Map<String, dynamic>)['offline'] == true)
+                (doc.id, "ขาดการติดต่อ")
+              else if ((doc.data() as Map<String, dynamic>)['faultType'] !=
+                  null)
+                (
+                  doc.id,
+                  (doc.data() as Map<String, dynamic>)['faultType'] ==
+                          'valve_stuck_open'
+                      ? "วาล์วค้างเปิด"
+                      : "วาล์วอาจไม่ทำงาน",
+                ),
+          ];
+
+          if (problems.isNotEmpty && !_alertShown) {
+            _alertShown = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!context.mounted) return;
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Row(
+                    children: [
+                      Icon(Icons.warning_amber_rounded, color: Colors.red),
+                      SizedBox(width: 8),
+                      Text("พบอุปกรณ์มีปัญหา"),
+                    ],
+                  ),
+                  content: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final p in problems)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Text("• ${p.$1}: ${p.$2}"),
+                          ),
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("ปิด"),
+                    ),
+                  ],
+                ),
+              );
+            });
+          }
 
           return Center(
             child: ConstrainedBox(
@@ -1173,19 +1237,24 @@ class _LastUpdatedTextState extends State<_LastUpdatedText> {
     return "${diff.inDays} วันที่แล้ว";
   }
 
+  // แสดง Row เดิมเสมอไม่ว่าจะมีข้อมูลหรือไม่ (แค่เปลี่ยนข้อความ) กันสัดส่วน
+  // การ์ดเพี้ยนไปเทียบกับอุปกรณ์ตัวอื่นที่มีข้อมูลอยู่แล้ว
   Widget _buildText(BuildContext context, Timestamp? ts) {
-    if (ts == null) return const SizedBox.shrink();
-
     final color = Theme.of(context).textTheme.bodySmall?.color;
 
     return Row(
-      mainAxisSize: MainAxisSize.min,
       children: [
         Icon(Icons.update, size: 12, color: color),
         const SizedBox(width: 4),
-        Text(
-          "อัปเดตล่าสุด: ${_relativeTime(ts.toDate())}",
-          style: TextStyle(fontSize: 11, color: color),
+        Flexible(
+          child: Text(
+            ts == null
+                ? "ยังไม่มีข้อมูล"
+                : "อัปเดตล่าสุด: ${_relativeTime(ts.toDate())}",
+            style: TextStyle(fontSize: 11, color: color),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
       ],
     );
@@ -1317,12 +1386,21 @@ class _MoistureSparklineState extends State<_MoistureSparkline> {
   // ข้อมูลกับยังไม่มี — แกน Y ข้างในปรับสเกลเข้าหาข้อมูลเอง กราฟเลยไม่มีทาง
   // "โต" จนล้นกรอบนี้
   Widget _frame(BuildContext context, {required Widget child}) {
+    // นูนขึ้นมาเหมือนปุ่ม "บันทึก" (ElevatedButton) แทนแบบฝังลึกที่ทำไว้ก่อน
+    // — เงาอยู่ด้านล่าง/รอบขอบ ให้ดูเหมือนลอยอยู่เหนือพื้นการ์ด
     return Container(
       height: 44,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        border: Border.all(color: Theme.of(context).dividerColor),
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(10),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.18),
+            blurRadius: 6,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: child,
     );
