@@ -56,6 +56,16 @@ class _IncidentHistoryTab extends StatelessWidget {
       Icons.report_problem_outlined,
       Colors.orange
     ),
+    "sensor_error": (
+      "เซนเซอร์อ่านค่าไม่สำเร็จ",
+      Icons.sensors_off,
+      Colors.red,
+    ),
+    "nano_error": (
+      "ติดต่อ Nano ไม่ได้",
+      Icons.developer_board_off,
+      Colors.red,
+    ),
   };
 
   @override
