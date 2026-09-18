@@ -479,6 +479,7 @@ class _HomePageState extends State<HomePage> {
                           key: ValueKey(doc.id),
                           nanoId: doc.id,
                           data: data,
+                          index: index,
                         );
                       },
                     ),
@@ -496,16 +497,30 @@ class _HomePageState extends State<HomePage> {
 class _DeviceCard extends StatefulWidget {
   final String nanoId;
   final Map<String, dynamic> data;
+  final int index;
 
-  const _DeviceCard({super.key, required this.nanoId, required this.data});
+  const _DeviceCard({
+    super.key,
+    required this.nanoId,
+    required this.data,
+    this.index = 0,
+  });
 
   @override
   State<_DeviceCard> createState() => _DeviceCardState();
 }
 
-class _DeviceCardState extends State<_DeviceCard> {
+class _DeviceCardState extends State<_DeviceCard>
+    with SingleTickerProviderStateMixin {
   late final TextEditingController _controller;
   final _focusNode = FocusNode();
+
+  // อนิเมชั่นตอนการ์ดเพิ่งปรากฏขึ้นครั้งแรก (fade + เลื่อนขึ้นเล็กน้อย) หน่วง
+  // เวลาเริ่มตามตำแหน่งในกริด ให้ดูเป็นการ "ไล่โผล่" ทีละใบแทนที่จะโผล่มา
+  // พร้อมกันหมดทุกใบ
+  late final AnimationController _entranceController;
+  late final Animation<double> _fadeAnim;
+  late final Animation<Offset> _slideAnim;
 
   double get _currentTarget => (widget.data['Automois'] ?? 20).toDouble();
 
@@ -513,6 +528,26 @@ class _DeviceCardState extends State<_DeviceCard> {
   void initState() {
     super.initState();
     _controller = TextEditingController(text: _currentTarget.toString());
+
+    _entranceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    );
+    _fadeAnim = CurvedAnimation(
+      parent: _entranceController,
+      curve: Curves.easeOut,
+    );
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0, 0.06),
+      end: Offset.zero,
+    ).animate(_fadeAnim);
+
+    Future.delayed(
+      Duration(milliseconds: (widget.index * 60).clamp(0, 600)),
+      () {
+        if (mounted) _entranceController.forward();
+      },
+    );
   }
 
   @override
@@ -529,6 +564,7 @@ class _DeviceCardState extends State<_DeviceCard> {
   void dispose() {
     _controller.dispose();
     _focusNode.dispose();
+    _entranceController.dispose();
     super.dispose();
   }
 
@@ -544,7 +580,7 @@ class _DeviceCardState extends State<_DeviceCard> {
     final faultType = data['faultType'] as String?;
     final hasValveFault = !isOffline && faultType != null;
 
-    return Card(
+    final card = Card(
       child: Padding(
         padding: const EdgeInsets.all(18),
         // การ์ดทุกใบสูงเท่ากันตายตัว (กำหนดจาก GridView) — ห่อด้วย
@@ -848,6 +884,11 @@ class _DeviceCardState extends State<_DeviceCard> {
         ),
       ),
     );
+
+    return FadeTransition(
+      opacity: _fadeAnim,
+      child: SlideTransition(position: _slideAnim, child: card),
+    );
   }
 }
 
@@ -911,7 +952,8 @@ class _SummaryBar extends StatelessWidget {
               icon: Icons.sensors,
               iconColor: okColor,
               label: "อุปกรณ์ทั้งหมด",
-              value: "$totalDevices",
+              numericValue: totalDevices.toDouble(),
+              format: (v) => v.round().toString(),
             ),
           ),
           const SizedBox(width: 10),
@@ -920,7 +962,8 @@ class _SummaryBar extends StatelessWidget {
               icon: Icons.warning_amber_rounded,
               iconColor: alertCount > 0 ? Colors.red : okColor,
               label: "แจ้งเตือน",
-              value: "$alertCount",
+              numericValue: alertCount.toDouble(),
+              format: (v) => v.round().toString(),
             ),
           ),
           const SizedBox(width: 10),
@@ -929,7 +972,8 @@ class _SummaryBar extends StatelessWidget {
               icon: Icons.water_drop,
               iconColor: const Color(0xFF1E88E5),
               label: "ความชื้นเฉลี่ย",
-              value: avgMoisture.toStringAsFixed(1),
+              numericValue: avgMoisture,
+              format: (v) => v.toStringAsFixed(1),
             ),
           ),
         ],
@@ -942,13 +986,15 @@ class _KpiCard extends StatelessWidget {
   final IconData icon;
   final Color iconColor;
   final String label;
-  final String value;
+  final double numericValue;
+  final String Function(double) format;
 
   const _KpiCard({
     required this.icon,
     required this.iconColor,
     required this.label,
-    required this.value,
+    required this.numericValue,
+    required this.format,
   });
 
   @override
@@ -998,13 +1044,22 @@ class _KpiCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    Text(
-                      value,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 26,
-                        height: 1,
-                      ),
+                    // ตัวเลขไล่จากค่าเดิมไปค่าใหม่ (นับขึ้น/ลง) แทนกระโดด
+                    // ทันที ทุกครั้งที่ Firestore stream ส่งค่าใหม่เข้ามา
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0, end: numericValue),
+                      duration: const Duration(milliseconds: 500),
+                      curve: Curves.easeOut,
+                      builder: (context, animatedValue, _) {
+                        return Text(
+                          format(animatedValue),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 26,
+                            height: 1,
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -1349,24 +1404,41 @@ class _MoistureGauge extends StatelessWidget {
         SizedBox(
           width: 40,
           height: 40,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              CircularProgressIndicator(
-                value: value == null ? 0 : ratio,
-                strokeWidth: 4,
-                backgroundColor: color.withValues(alpha: 0.15),
-                valueColor: AlwaysStoppedAnimation<Color>(color),
-              ),
-              Text(
-                value == null ? '-' : value.toStringAsFixed(0),
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: color,
-                ),
-              ),
-            ],
+          // ค่าความชื้นเป็น real-time (มาจาก Firestore stream) เปลี่ยนบ่อย —
+          // ใช้ TweenAnimationBuilder ไล่ค่าเก่าไปค่าใหม่ทีละนิด (ทั้งวงแหวน
+          // และตัวเลข) แทนการกระตุกเปลี่ยนทันทีทุกครั้งที่ค่าขยับ
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: value == null ? 0 : ratio),
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeOut,
+            builder: (context, animatedRatio, _) {
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  CircularProgressIndicator(
+                    value: animatedRatio,
+                    strokeWidth: 4,
+                    backgroundColor: color.withValues(alpha: 0.15),
+                    valueColor: AlwaysStoppedAnimation<Color>(color),
+                  ),
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: value ?? 0),
+                    duration: const Duration(milliseconds: 500),
+                    curve: Curves.easeOut,
+                    builder: (context, animatedValue, _) {
+                      return Text(
+                        value == null ? '-' : animatedValue.toStringAsFixed(0),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: color,
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              );
+            },
           ),
         ),
         const SizedBox(height: 4),

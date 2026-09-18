@@ -48,11 +48,26 @@ Future<void> _loadThemeMode() async {
   }
 }
 
+// ทุกแพลตฟอร์มใช้ transition แบบเดียวกัน — FadeForwardsPageTransitionsBuilder
+// คือทรานสิชั่นแบบเดียวกับที่ Android 14 (Android U) ใช้จริงตอนนี้ (fade
+// เข้า/ออกผสมเลื่อนเล็กน้อย) ทันสมัยกว่า ZoomPageTransitionsBuilder ซึ่งเป็น
+// ค่า default เก่าของ Android — เว็บปกติไม่มีอนิเมชั่นเปลี่ยนหน้าเลยด้วยซ้ำ
+const _pageTransitionsTheme = PageTransitionsTheme(
+  builders: {
+    TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
+    TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+    TargetPlatform.windows: FadeForwardsPageTransitionsBuilder(),
+    TargetPlatform.macOS: FadeForwardsPageTransitionsBuilder(),
+    TargetPlatform.linux: FadeForwardsPageTransitionsBuilder(),
+  },
+);
+
 final ThemeData _appTheme = ThemeData(
   useMaterial3: true,
   colorSchemeSeed: const Color(0xFF2E7D32),
   scaffoldBackgroundColor: const Color(0xFFF3F8F3),
   textTheme: GoogleFonts.kanitTextTheme(),
+  pageTransitionsTheme: _pageTransitionsTheme,
   appBarTheme: AppBarTheme(
     backgroundColor: _brandGreen,
     foregroundColor: Colors.white,
@@ -104,6 +119,7 @@ final ThemeData _appDarkTheme = ThemeData(
   scaffoldBackgroundColor: const Color(0xFF121212),
   textTheme: GoogleFonts.kanitTextTheme(
       ThemeData(brightness: Brightness.dark).textTheme),
+  pageTransitionsTheme: _pageTransitionsTheme,
   appBarTheme: AppBarTheme(
     backgroundColor: _brandGreen,
     foregroundColor: Colors.white,
