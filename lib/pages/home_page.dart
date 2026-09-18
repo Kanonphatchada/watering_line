@@ -33,7 +33,13 @@ class _HomePageState extends State<HomePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("🌱 หน้าหลัก"),
+        title: const Row(
+          children: [
+            Icon(Icons.eco_rounded),
+            SizedBox(width: 8),
+            Text("หน้าหลัก"),
+          ],
+        ),
         actions: [
           ValueListenableBuilder<ThemeMode>(
             valueListenable: themeModeNotifier,
@@ -115,7 +121,7 @@ class _HomePageState extends State<HomePage> {
                   .where('uid', isEqualTo: uid)
                   .get();
 
-              List<String> alerts = [];
+              List<Widget> alerts = [];
 
               for (var doc in snapshot.docs) {
                 final data = doc.data();
@@ -126,7 +132,31 @@ class _HomePageState extends State<HomePage> {
 
                 if (moisture > automois) {
                   alerts.add(
-                    "⚠️ ${doc.id}\nความชื้น: $moisture\nค่าที่กำหนด: $automois",
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.warning_amber_rounded,
+                              color: Colors.orange, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  doc.id,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600),
+                                ),
+                                Text(
+                                    "ความชื้น: $moisture · ค่าที่กำหนด: $automois"),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   );
                 }
               }
@@ -149,11 +179,21 @@ class _HomePageState extends State<HomePage> {
                     ],
                   ),
                   content: SingleChildScrollView(
-                    child: Text(
-                      alerts.isEmpty
-                          ? "✅ ไม่มีการแจ้งเตือน"
-                          : alerts.join("\n\n"),
-                    ),
+                    child: alerts.isEmpty
+                        ? const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.check_circle_outline_rounded,
+                                  color: Colors.green, size: 20),
+                              SizedBox(width: 8),
+                              Text("ไม่มีการแจ้งเตือน"),
+                            ],
+                          )
+                        : Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: alerts,
+                          ),
                   ),
                   actions: [
                     TextButton(
@@ -281,7 +321,16 @@ class _HomePageState extends State<HomePage> {
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return Center(child: Text("❌ ERROR: ${snapshot.error}"));
+            return Center(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline_rounded, color: Colors.red),
+                  const SizedBox(width: 8),
+                  Flexible(child: Text("เกิดข้อผิดพลาด: ${snapshot.error}")),
+                ],
+              ),
+            );
           }
 
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -1250,9 +1299,9 @@ class _LastUpdatedTextState extends State<_LastUpdatedText> {
           child: Text(
             ts == null
                 ? "ยังไม่มีข้อมูล"
-                : "อัปเดตล่าสุด: ${_relativeTime(ts.toDate())}",
+                : "อัปเดต: ${_relativeTime(ts.toDate())}",
             style: TextStyle(fontSize: 11, color: color),
-            maxLines: 1,
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
         ),
