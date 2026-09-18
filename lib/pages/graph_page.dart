@@ -111,7 +111,15 @@ class _GraphPageState extends State<GraphPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("📈 ${widget.nanoId}"),
+        title: Row(
+          children: [
+            const Icon(Icons.show_chart_rounded),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(widget.nanoId, overflow: TextOverflow.ellipsis),
+            ),
+          ],
+        ),
       ),
       body: isLoading ? const _GraphSkeleton() : _buildContent(),
     );

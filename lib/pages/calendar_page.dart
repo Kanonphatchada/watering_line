@@ -96,7 +96,15 @@ class _CalendarPageState extends State<CalendarPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("📅 ${widget.nanoId}"),
+        title: Row(
+          children: [
+            const Icon(Icons.calendar_month_rounded),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(widget.nanoId, overflow: TextOverflow.ellipsis),
+            ),
+          ],
+        ),
       ),
       body: isLoading ? const _CalendarSkeleton() : _buildContent(context),
     );
@@ -263,9 +271,25 @@ class _CalendarPageState extends State<CalendarPage> {
                                   mainAxisSize: MainAxisSize.min,
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text("💧 ความชื้น: $moisture"),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.water_drop_rounded,
+                                            size: 18),
+                                        const SizedBox(width: 6),
+                                        Text("ความชื้น: $moisture"),
+                                      ],
+                                    ),
                                     const SizedBox(height: 4),
-                                    Text("🎯 ค่าที่กำหนด: $targetMoisture"),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.track_changes_rounded,
+                                            size: 18),
+                                        const SizedBox(width: 6),
+                                        Text("ค่าที่กำหนด: $targetMoisture"),
+                                      ],
+                                    ),
                                     const SizedBox(height: 10),
                                     Row(
                                       mainAxisSize: MainAxisSize.min,

@@ -140,7 +140,15 @@ class _AddDevicePageState extends State<AddDevicePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("🌱 เพิ่มอุปกรณ์")),
+      appBar: AppBar(
+        title: const Row(
+          children: [
+            Icon(Icons.add_circle_outline_rounded),
+            SizedBox(width: 8),
+            Text("เพิ่มอุปกรณ์"),
+          ],
+        ),
+      ),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),

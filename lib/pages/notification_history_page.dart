@@ -17,7 +17,18 @@ class NotificationHistoryPage extends StatelessWidget {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title: Text("🔔 ประวัติแจ้งเตือน $nanoId"),
+          title: Row(
+            children: [
+              const Icon(Icons.notifications_active_rounded),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  "ประวัติแจ้งเตือน $nanoId",
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
           bottom: const TabBar(
             tabs: [
               Tab(text: "อุปกรณ์มีปัญหา"),
@@ -90,7 +101,15 @@ class _IncidentHistoryTab extends StatelessWidget {
 
         if (docs.isEmpty) {
           return const Center(
-            child: Text("✅ ไม่พบประวัติปัญหาของอุปกรณ์นี้"),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.check_circle_outline_rounded,
+                    size: 48, color: Colors.green),
+                SizedBox(height: 8),
+                Text("ไม่พบประวัติปัญหาของอุปกรณ์นี้"),
+              ],
+            ),
           );
         }
 
@@ -321,7 +340,15 @@ class _MoistureAlertHistoryTab extends StatelessWidget {
 
             if (alerts.isEmpty) {
               return const Center(
-                child: Text("✅ ไม่พบประวัติการแจ้งเตือน"),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.check_circle_outline_rounded,
+                        size: 48, color: Colors.green),
+                    SizedBox(height: 8),
+                    Text("ไม่พบประวัติการแจ้งเตือน"),
+                  ],
+                ),
               );
             }
 

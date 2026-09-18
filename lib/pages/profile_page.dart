@@ -73,7 +73,23 @@ class _ProfilePageState extends State<ProfilePage> {
     setState(() => isSaving = false);
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("✅ บันทึกชื่อแล้ว")),
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFF2E7D32),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+        content: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.check_circle, color: Colors.white, size: 20),
+            SizedBox(width: 10),
+            Text(
+              "บันทึกชื่อแล้ว",
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -114,7 +130,15 @@ class _ProfilePageState extends State<ProfilePage> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text("👤 โปรไฟล์ผู้ใช้")),
+      appBar: AppBar(
+        title: const Row(
+          children: [
+            Icon(Icons.person_rounded),
+            SizedBox(width: 8),
+            Text("โปรไฟล์ผู้ใช้"),
+          ],
+        ),
+      ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : user == null
