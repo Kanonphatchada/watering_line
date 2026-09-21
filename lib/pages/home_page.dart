@@ -1005,11 +1005,12 @@ class _HomePageState extends State<HomePage> {
                             gridDelegate:
                                 const SliverGridDelegateWithMaxCrossAxisExtent(
                               maxCrossAxisExtent: 420,
-                              // ลดจาก 480 เป็น 412 (480 - 68) พอดีกับความสูงที่
-                              // หายไปตอนเอากราฟเส้นออก (SizedBox 12 + กราฟสูง
-                              // 44 + SizedBox 12) กันไม่ให้เหลือพื้นที่ว่างล่าง
-                              // การ์ดเยอะเกินไป
-                              mainAxisExtent: 412,
+                              // 412 แน่นเกินไป เนื้อหาล้นจนโชว์ scrollbar/ดูโดน
+                              // ตัด (การ์ดที่เปิดตารางเวลาไว้มีแถบ "รดได้/ห้าม
+                              // รด" เพิ่มมาอีกบรรทัดที่ตอนคำนวณ 412 ไม่ได้กันที่
+                              // ไว้ให้) ปรับเป็น 452 เผื่อพื้นที่ให้พอสำหรับทุก
+                              // เคส ยอมเหลือพื้นที่ว่างเล็กน้อยดีกว่าเนื้อหาล้น
+                              mainAxisExtent: 452,
                               mainAxisSpacing: 16,
                               crossAxisSpacing: 16,
                             ),
