@@ -337,68 +337,72 @@ class _HomePageState extends State<HomePage> {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: const Text("ตั้งเวลารดน้ำทั้งฟาร์ม"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                "ใช้กับอุปกรณ์ $deviceCount ตัวในกลุ่ม \"$groupId\" "
-                "(อุปกรณ์ที่ตั้งเวลาเฉพาะตัวไว้แล้วจะไม่ถูกทับ)",
-                style: const TextStyle(fontSize: 12),
-              ),
-              const SizedBox(height: 12),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text("เปิดใช้ตารางเวลา"),
-                value: enabled,
-                onChanged: (v) => setDialogState(() => enabled = v),
-              ),
-              if (enabled) ...[
-                const SizedBox(height: 4),
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(
-                      value: 'allow',
-                      label: Text("รดได้เฉพาะช่วงนี้"),
-                    ),
-                    ButtonSegment(
-                      value: 'block',
-                      label: Text("ห้ามรดช่วงนี้"),
-                    ),
-                  ],
-                  selected: {mode},
-                  onSelectionChanged: (s) =>
-                      setDialogState(() => mode = s.first),
+          // ล็อกความกว้างไว้คงที่ เหมือนกับ dialog ตั้งเวลารายอุปกรณ์
+          content: SizedBox(
+            width: 320,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "ใช้กับอุปกรณ์ $deviceCount ตัวในกลุ่ม \"$groupId\" "
+                  "(อุปกรณ์ที่ตั้งเวลาเฉพาะตัวไว้แล้วจะไม่ถูกทับ)",
+                  style: const TextStyle(fontSize: 12),
                 ),
                 const SizedBox(height: 12),
-                ListTile(
+                SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.wb_sunny_outlined),
-                  title: const Text("เริ่ม"),
-                  trailing: Text(start.format(context)),
-                  onTap: () async {
-                    final picked = await showTimePicker(
-                      context: context,
-                      initialTime: start,
-                    );
-                    if (picked != null) setDialogState(() => start = picked);
-                  },
+                  title: const Text("เปิดใช้ตารางเวลา"),
+                  value: enabled,
+                  onChanged: (v) => setDialogState(() => enabled = v),
                 ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.nights_stay_outlined),
-                  title: const Text("สิ้นสุด"),
-                  trailing: Text(end.format(context)),
-                  onTap: () async {
-                    final picked = await showTimePicker(
-                      context: context,
-                      initialTime: end,
-                    );
-                    if (picked != null) setDialogState(() => end = picked);
-                  },
-                ),
+                if (enabled) ...[
+                  const SizedBox(height: 4),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(
+                        value: 'allow',
+                        label: Text("รดได้เฉพาะช่วงนี้"),
+                      ),
+                      ButtonSegment(
+                        value: 'block',
+                        label: Text("ห้ามรดช่วงนี้"),
+                      ),
+                    ],
+                    selected: {mode},
+                    onSelectionChanged: (s) =>
+                        setDialogState(() => mode = s.first),
+                  ),
+                  const SizedBox(height: 12),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.wb_sunny_outlined),
+                    title: const Text("เริ่ม"),
+                    trailing: Text(start.format(context)),
+                    onTap: () async {
+                      final picked = await showTimePicker(
+                        context: context,
+                        initialTime: start,
+                      );
+                      if (picked != null) setDialogState(() => start = picked);
+                    },
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.nights_stay_outlined),
+                    title: const Text("สิ้นสุด"),
+                    trailing: Text(end.format(context)),
+                    onTap: () async {
+                      final picked = await showTimePicker(
+                        context: context,
+                        initialTime: end,
+                      );
+                      if (picked != null) setDialogState(() => end = picked);
+                    },
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
           actions: [
             TextButton(
@@ -1005,12 +1009,7 @@ class _HomePageState extends State<HomePage> {
                             gridDelegate:
                                 const SliverGridDelegateWithMaxCrossAxisExtent(
                               maxCrossAxisExtent: 420,
-                              // 412 แน่นเกินไป เนื้อหาล้นจนโชว์ scrollbar/ดูโดน
-                              // ตัด (การ์ดที่เปิดตารางเวลาไว้มีแถบ "รดได้/ห้าม
-                              // รด" เพิ่มมาอีกบรรทัดที่ตอนคำนวณ 412 ไม่ได้กันที่
-                              // ไว้ให้) ปรับเป็น 452 เผื่อพื้นที่ให้พอสำหรับทุก
-                              // เคส ยอมเหลือพื้นที่ว่างเล็กน้อยดีกว่าเนื้อหาล้น
-                              mainAxisExtent: 452,
+                              mainAxisExtent: 420,
                               mainAxisSpacing: 16,
                               crossAxisSpacing: 16,
                             ),
@@ -1154,105 +1153,111 @@ class _DeviceCardState extends State<_DeviceCard>
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: const Text("ตั้งเวลารดน้ำ"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text("ตั้งเวลาเฉพาะอุปกรณ์นี้"),
-                subtitle: const Text("ไม่ใช้ตารางเวลาของฟาร์ม"),
-                value: useOverride,
-                onChanged: (v) => setDialogState(() => useOverride = v),
-              ),
-              if (!useOverride) ...[
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    color:
-                        Theme.of(context).colorScheme.surfaceContainerHighest,
-                  ),
-                  child: Text(
-                    groupSchedule?['scheduleEnabled'] == true
-                        ? "ตอนนี้ใช้ตารางเวลาของฟาร์ม: "
-                            "${groupSchedule?['scheduleMode'] == 'block' ? 'ห้ามรด' : 'รดได้'} "
-                            "${groupSchedule?['scheduleStart']}-${groupSchedule?['scheduleEnd']}"
-                        : "ฟาร์มยังไม่ได้ตั้งตารางเวลาไว้ — อุปกรณ์นี้จะรดน้ำ "
-                            "ตามปกติไม่มีข้อจำกัดเรื่องเวลา",
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                ),
-              ],
-              if (useOverride) ...[
-                const SizedBox(height: 4),
+          // ล็อกความกว้างไว้คงที่ ไม่งั้น AlertDialog จะห่อความกว้างตาม
+          // เนื้อหาที่ยาวที่สุด ตอนสลับโหมด allow/block ข้อความอธิบายยาว
+          // ไม่เท่ากัน ทำให้กล่องขยับบีบ/ขยายไปมาเวลาสลับ
+          content: SizedBox(
+            width: 320,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text("เปิดใช้ตารางเวลา"),
-                  value: enabled,
-                  onChanged: (v) => setDialogState(() => enabled = v),
+                  title: const Text("ตั้งเวลาเฉพาะอุปกรณ์นี้"),
+                  subtitle: const Text("ไม่ใช้ตารางเวลาของฟาร์ม"),
+                  value: useOverride,
+                  onChanged: (v) => setDialogState(() => useOverride = v),
                 ),
-              ],
-              if (useOverride && enabled) ...[
-                const SizedBox(height: 4),
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(
-                      value: 'allow',
-                      label: Text("รดได้เฉพาะช่วงนี้"),
+                if (!useOverride) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      color:
+                          Theme.of(context).colorScheme.surfaceContainerHighest,
                     ),
-                    ButtonSegment(
-                      value: 'block',
-                      label: Text("ห้ามรดช่วงนี้"),
+                    child: Text(
+                      groupSchedule?['scheduleEnabled'] == true
+                          ? "ตอนนี้ใช้ตารางเวลาของฟาร์ม: "
+                              "${groupSchedule?['scheduleMode'] == 'block' ? 'ห้ามรด' : 'รดได้'} "
+                              "${groupSchedule?['scheduleStart']}-${groupSchedule?['scheduleEnd']}"
+                          : "ฟาร์มยังไม่ได้ตั้งตารางเวลาไว้ — อุปกรณ์นี้จะรดน้ำ "
+                              "ตามปกติไม่มีข้อจำกัดเรื่องเวลา",
+                      style: const TextStyle(fontSize: 12),
                     ),
-                  ],
-                  selected: {mode},
-                  onSelectionChanged: (s) =>
-                      setDialogState(() => mode = s.first),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  mode == 'allow'
-                      ? "รดน้ำอัตโนมัติได้เฉพาะช่วงเวลานี้เท่านั้น "
-                          "นอกช่วงนี้ระบบจะปิดโหมด Auto ให้ชั่วคราว"
-                      : "รดน้ำอัตโนมัติได้ตามปกติ ยกเว้นช่วงเวลานี้ที่จะปิด "
-                          "โหมด Auto ให้ชั่วคราว",
-                  style: const TextStyle(fontSize: 12),
-                ),
-                const SizedBox(height: 8),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.wb_sunny_outlined),
-                  title: const Text("เริ่ม"),
-                  trailing: Text(start.format(context)),
-                  onTap: () async {
-                    final picked = await showTimePicker(
-                      context: context,
-                      initialTime: start,
-                    );
-                    if (picked != null) {
-                      setDialogState(() => start = picked);
-                    }
-                  },
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.nights_stay_outlined),
-                  title: const Text("สิ้นสุด"),
-                  trailing: Text(end.format(context)),
-                  onTap: () async {
-                    final picked = await showTimePicker(
-                      context: context,
-                      initialTime: end,
-                    );
-                    if (picked != null) {
-                      setDialogState(() => end = picked);
-                    }
-                  },
-                ),
+                  ),
+                ],
+                if (useOverride) ...[
+                  const SizedBox(height: 4),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text("เปิดใช้ตารางเวลา"),
+                    value: enabled,
+                    onChanged: (v) => setDialogState(() => enabled = v),
+                  ),
+                ],
+                if (useOverride && enabled) ...[
+                  const SizedBox(height: 4),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(
+                        value: 'allow',
+                        label: Text("รดได้เฉพาะช่วงนี้"),
+                      ),
+                      ButtonSegment(
+                        value: 'block',
+                        label: Text("ห้ามรดช่วงนี้"),
+                      ),
+                    ],
+                    selected: {mode},
+                    onSelectionChanged: (s) =>
+                        setDialogState(() => mode = s.first),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    mode == 'allow'
+                        ? "รดน้ำอัตโนมัติได้เฉพาะช่วงเวลานี้เท่านั้น "
+                            "นอกช่วงนี้ระบบจะปิดโหมด Auto ให้ชั่วคราว"
+                        : "รดน้ำอัตโนมัติได้ตามปกติ ยกเว้นช่วงเวลานี้ที่จะปิด "
+                            "โหมด Auto ให้ชั่วคราว",
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  const SizedBox(height: 8),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.wb_sunny_outlined),
+                    title: const Text("เริ่ม"),
+                    trailing: Text(start.format(context)),
+                    onTap: () async {
+                      final picked = await showTimePicker(
+                        context: context,
+                        initialTime: start,
+                      );
+                      if (picked != null) {
+                        setDialogState(() => start = picked);
+                      }
+                    },
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.nights_stay_outlined),
+                    title: const Text("สิ้นสุด"),
+                    trailing: Text(end.format(context)),
+                    onTap: () async {
+                      final picked = await showTimePicker(
+                        context: context,
+                        initialTime: end,
+                      );
+                      if (picked != null) {
+                        setDialogState(() => end = picked);
+                      }
+                    },
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
           actions: [
             TextButton(
