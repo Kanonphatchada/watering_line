@@ -43,6 +43,8 @@ class _LoginPageState extends State<LoginPage> {
 
         clearUrlQueryParams();
 
+        if (!mounted) return;
+
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const HomePage()),

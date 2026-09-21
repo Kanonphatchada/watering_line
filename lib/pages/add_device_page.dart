@@ -182,6 +182,8 @@ class _AddDevicePageState extends State<AddDevicePage>
 
     await showPopup("เชื่อมต่อสำเร็จ");
 
+    if (!mounted) return;
+
     setState(() {
       isLoading = false;
     });
