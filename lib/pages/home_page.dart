@@ -38,6 +38,22 @@ bool isWithinScheduleWindow(String startHHmm, String endHHmm) {
   return nowMinutes >= startMinutes || nowMinutes < endMinutes;
 }
 
+TimeOfDay? parseHHmm(String? hhmm) {
+  if (hhmm == null) return null;
+  final parts = hhmm.split(':');
+  if (parts.length != 2) return null;
+  final h = int.tryParse(parts[0]);
+  final m = int.tryParse(parts[1]);
+  if (h == null || m == null) return null;
+  return TimeOfDay(hour: h, minute: m);
+}
+
+String formatHHmm(TimeOfDay time) {
+  final h = time.hour.toString().padLeft(2, '0');
+  final m = time.minute.toString().padLeft(2, '0');
+  return '$h:$m';
+}
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -49,6 +65,241 @@ class _HomePageState extends State<HomePage> {
   // กันไม่ให้ popup แจ้งเตือนอุปกรณ์มีปัญหาเด้งซ้ำทุกครั้งที่ stream ยิง
   // ค่าใหม่มา — โชว์แค่ครั้งเดียวต่อการเปิดหน้านี้หนึ่งรอบ
   bool _alertShown = false;
+
+  // ค้นหาอุปกรณ์ด้วยชื่อ — กรองแค่ตอนแสดงผลกริดเท่านั้น (ไม่กรองตัวเลขสรุป/
+  // popup แจ้งเตือนด้านบน ให้ยังนับครบทุกอุปกรณ์เหมือนเดิมไม่ว่าจะค้นหาอะไร)
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  // ตั้งเวลารดน้ำทั้งกลุ่ม/ฟาร์มในครั้งเดียว — ให้ทุกอุปกรณ์ในกลุ่มเดียวกัน
+  // (อาจเป็นร้อยตัว) ใช้ตารางเวลาเดียวกันโดย default โดยไม่ต้องตั้งทีละตัว
+  // อุปกรณ์ที่ตั้ง scheduleOverride ของตัวเองไว้แล้วจะไม่ถูกทับ (ดู
+  // resolveScheduleSource ฝั่ง checkDevices.js)
+  Future<void> _openFarmScheduleDialog(
+    BuildContext context,
+    List<QueryDocumentSnapshot> docs,
+  ) async {
+    final groupIds = docs
+        .map((d) => (d.data() as Map<String, dynamic>)['groupId'] as String?)
+        .whereType<String>()
+        .toSet()
+        .toList();
+
+    if (groupIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("ไม่พบกลุ่ม/ฟาร์มของอุปกรณ์เลย")),
+      );
+      return;
+    }
+
+    String groupId;
+    if (groupIds.length == 1) {
+      groupId = groupIds.first;
+    } else {
+      final picked = await showDialog<String>(
+        context: context,
+        builder: (context) => SimpleDialog(
+          title: const Text("เลือกกลุ่ม/ฟาร์ม"),
+          children: [
+            for (final g in groupIds)
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(context, g),
+                child: Text(g),
+              ),
+          ],
+        ),
+      );
+      if (picked == null) return;
+      groupId = picked;
+    }
+
+    if (!context.mounted) return;
+    await _showFarmScheduleEditor(context, groupId, docs);
+  }
+
+  Future<void> _showFarmScheduleEditor(
+    BuildContext context,
+    String groupId,
+    List<QueryDocumentSnapshot> docs,
+  ) async {
+    final registryDoc = await FirebaseFirestore.instance
+        .collection('device_registry')
+        .doc(groupId)
+        .get();
+    final registryData = registryDoc.data() ?? {};
+
+    bool enabled = registryData['scheduleEnabled'] == true;
+    String mode = registryData['scheduleMode'] == 'block' ? 'block' : 'allow';
+    TimeOfDay start = parseHHmm(registryData['scheduleStart'] as String?) ??
+        const TimeOfDay(hour: 6, minute: 0);
+    TimeOfDay end = parseHHmm(registryData['scheduleEnd'] as String?) ??
+        const TimeOfDay(hour: 18, minute: 0);
+
+    final deviceCount = docs
+        .where((d) => (d.data() as Map<String, dynamic>)['groupId'] == groupId)
+        .length;
+
+    if (!mounted) return;
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text("ตั้งเวลารดน้ำทั้งฟาร์ม"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "ใช้กับอุปกรณ์ $deviceCount ตัวในกลุ่ม \"$groupId\" "
+                "(อุปกรณ์ที่ตั้งเวลาเฉพาะตัวไว้แล้วจะไม่ถูกทับ)",
+                style: const TextStyle(fontSize: 12),
+              ),
+              const SizedBox(height: 12),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text("เปิดใช้ตารางเวลา"),
+                value: enabled,
+                onChanged: (v) => setDialogState(() => enabled = v),
+              ),
+              if (enabled) ...[
+                const SizedBox(height: 4),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(
+                      value: 'allow',
+                      label: Text("รดได้เฉพาะช่วงนี้"),
+                    ),
+                    ButtonSegment(
+                      value: 'block',
+                      label: Text("ห้ามรดช่วงนี้"),
+                    ),
+                  ],
+                  selected: {mode},
+                  onSelectionChanged: (s) =>
+                      setDialogState(() => mode = s.first),
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.wb_sunny_outlined),
+                  title: const Text("เริ่ม"),
+                  trailing: Text(start.format(context)),
+                  onTap: () async {
+                    final picked = await showTimePicker(
+                      context: context,
+                      initialTime: start,
+                    );
+                    if (picked != null) setDialogState(() => start = picked);
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.nights_stay_outlined),
+                  title: const Text("สิ้นสุด"),
+                  trailing: Text(end.format(context)),
+                  onTap: () async {
+                    final picked = await showTimePicker(
+                      context: context,
+                      initialTime: end,
+                    );
+                    if (picked != null) setDialogState(() => end = picked);
+                  },
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text("ยกเลิก"),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text("บันทึก"),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (saved != true) return;
+
+    final startHHmm = formatHHmm(start);
+    final endHHmm = formatHHmm(end);
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('device_registry')
+          .doc(groupId)
+          .update({
+        'scheduleEnabled': enabled,
+        'scheduleMode': mode,
+        'scheduleStart': startHHmm,
+        'scheduleEnd': endHHmm,
+      });
+
+      // อัปเดต Auto ทันทีให้ทุกอุปกรณ์ในกลุ่มที่ "ไม่ได้" override ไว้เอง —
+      // ให้เห็นผลตรงกับที่ตั้งค่าไว้เลย ไม่ต้องรอ backend รอบถัดไป (15 นาที)
+      final withinWindow = isWithinScheduleWindow(startHHmm, endHHmm);
+      final allowedNow = mode == 'block' ? !withinWindow : withinWindow;
+
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in docs) {
+        final d = doc.data() as Map<String, dynamic>;
+        if (d['groupId'] != groupId) continue;
+        if (d['scheduleOverride'] == true) {
+          continue; // ไม่ทับอุปกรณ์ที่ override ไว้
+        }
+
+        final desiredAuto = d['desiredAuto'] ?? d['Auto'] ?? false;
+        final effective = enabled
+            ? (desiredAuto == true && allowedNow)
+            : (desiredAuto == true);
+        if (effective == (d['Auto'] == true)) continue;
+
+        batch.update(doc.reference, {
+          'Auto': effective,
+          if (effective) 'Valve': false,
+        });
+      }
+      await batch.commit();
+
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: const Color(0xFF2E7D32),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+          content: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.check_circle, color: Colors.white, size: 20),
+              SizedBox(width: 10),
+              Text(
+                "บันทึกตารางเวลาทั้งฟาร์มแล้ว",
+                style:
+                    TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+      );
+    } catch (err) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("บันทึกไม่สำเร็จ: $err")),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -487,6 +738,13 @@ class _HomePageState extends State<HomePage> {
             });
           }
 
+          // กรองแค่ตอนแสดงกริดเท่านั้น — ตัวเลขสรุป/popup ด้านบนยังนับจาก
+          // docs เต็มทุกตัวเสมอ ไม่ว่าจะค้นหาอะไรอยู่ก็ตาม
+          final query = _searchQuery.trim().toLowerCase();
+          final filteredDocs = query.isEmpty
+              ? docs
+              : docs.where((d) => d.id.toLowerCase().contains(query)).toList();
+
           return Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 1100),
@@ -497,29 +755,81 @@ class _HomePageState extends State<HomePage> {
                     alertCount: alertCount,
                     avgMoisture: avgMoisture,
                   ),
-                  Expanded(
-                    child: GridView.builder(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      gridDelegate:
-                          const SliverGridDelegateWithMaxCrossAxisExtent(
-                        maxCrossAxisExtent: 420,
-                        mainAxisExtent: 480,
-                        mainAxisSpacing: 16,
-                        crossAxisSpacing: 16,
-                      ),
-                      itemCount: docs.length,
-                      itemBuilder: (context, index) {
-                        final doc = docs[index];
-                        final data = doc.data() as Map<String, dynamic>;
-
-                        return _DeviceCard(
-                          key: ValueKey(doc.id),
-                          nanoId: doc.id,
-                          data: data,
-                          index: index,
-                        );
-                      },
+                  // ค้นหาอุปกรณ์ — จำเป็นตอนมีอุปกรณ์เยอะ (เช่น เป็นร้อยตัว)
+                  // เลื่อนหาทีละใบไม่ไหว + ปุ่มตั้งเวลาทั้งฟาร์มไว้ข้างๆ
+                  // (ต้องวางแถวนี้ ไม่ใช่ AppBar เพราะต้องใช้ docs ที่โหลด
+                  // มาแล้วจาก stream ด้านบน)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _searchController,
+                            onChanged: (v) => setState(() => _searchQuery = v),
+                            decoration: InputDecoration(
+                              isDense: true,
+                              hintText: "ค้นหาชื่ออุปกรณ์...",
+                              prefixIcon: const Icon(Icons.search, size: 20),
+                              suffixIcon: _searchQuery.isEmpty
+                                  ? null
+                                  : IconButton(
+                                      icon: const Icon(Icons.clear, size: 18),
+                                      onPressed: () {
+                                        _searchController.clear();
+                                        setState(() => _searchQuery = '');
+                                      },
+                                    ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton.filledTonal(
+                          tooltip: "ตั้งเวลารดน้ำทั้งฟาร์ม",
+                          icon: const Icon(Icons.schedule),
+                          onPressed: () => _openFarmScheduleDialog(
+                            context,
+                            docs,
+                          ),
+                        ),
+                      ],
                     ),
+                  ),
+                  Expanded(
+                    child: filteredDocs.isEmpty
+                        ? Center(
+                            child: Text(
+                              "ไม่พบอุปกรณ์ที่ตรงกับ \"$_searchQuery\"",
+                              style: TextStyle(
+                                color: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.color,
+                              ),
+                            ),
+                          )
+                        : GridView.builder(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            gridDelegate:
+                                const SliverGridDelegateWithMaxCrossAxisExtent(
+                              maxCrossAxisExtent: 420,
+                              mainAxisExtent: 480,
+                              mainAxisSpacing: 16,
+                              crossAxisSpacing: 16,
+                            ),
+                            itemCount: filteredDocs.length,
+                            itemBuilder: (context, index) {
+                              final doc = filteredDocs[index];
+                              final data = doc.data() as Map<String, dynamic>;
+
+                              return _DeviceCard(
+                                key: ValueKey(doc.id),
+                                nanoId: doc.id,
+                                data: data,
+                                index: index,
+                              );
+                            },
+                          ),
                   ),
                 ],
               ),
@@ -712,15 +1022,30 @@ class _DeviceCardState extends State<_DeviceCard>
     String nanoId,
     Map<String, dynamic> data,
   ) async {
+    bool useOverride = data['scheduleOverride'] == true;
     bool enabled = data['scheduleEnabled'] == true;
     // "allow" = รดได้เฉพาะในช่วงนี้เท่านั้น, "block" = รดได้ตลอดยกเว้นในช่วง
     // นี้ (เช่น เช้า-เย็น ยกเว้นเที่ยง แค่ตั้ง block 11:00-14:00 พอ ไม่ต้องมี
     // หลายช่วงเวลาให้ยุ่งยาก)
     String mode = data['scheduleMode'] == 'block' ? 'block' : 'allow';
-    TimeOfDay start = _parseHHmm(data['scheduleStart'] as String?) ??
+    TimeOfDay start = parseHHmm(data['scheduleStart'] as String?) ??
         const TimeOfDay(hour: 6, minute: 0);
-    TimeOfDay end = _parseHHmm(data['scheduleEnd'] as String?) ??
+    TimeOfDay end = parseHHmm(data['scheduleEnd'] as String?) ??
         const TimeOfDay(hour: 18, minute: 0);
+
+    // อุปกรณ์ทุกตัวอยู่ในกลุ่ม/ฟาร์มเดียวกันได้ ตั้งเวลาไว้ที่กลุ่มแล้วอาจ
+    // ครอบทุกอุปกรณ์อยู่แล้ว — ดึงมาโชว์เป็นข้อมูลตอนไม่ได้ override เอง
+    final groupId = data['groupId'] as String?;
+    Map<String, dynamic>? groupSchedule;
+    if (groupId != null) {
+      final registryDoc = await FirebaseFirestore.instance
+          .collection('device_registry')
+          .doc(groupId)
+          .get();
+      groupSchedule = registryDoc.data();
+    }
+
+    if (!context.mounted) return;
 
     final saved = await showDialog<bool>(
       context: context,
@@ -733,11 +1058,41 @@ class _DeviceCardState extends State<_DeviceCard>
             children: [
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text("เปิดใช้ตารางเวลา"),
-                value: enabled,
-                onChanged: (v) => setDialogState(() => enabled = v),
+                title: const Text("ตั้งเวลาเฉพาะอุปกรณ์นี้"),
+                subtitle: const Text("ไม่ใช้ตารางเวลาของฟาร์ม"),
+                value: useOverride,
+                onChanged: (v) => setDialogState(() => useOverride = v),
               ),
-              if (enabled) ...[
+              if (!useOverride) ...[
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    color:
+                        Theme.of(context).colorScheme.surfaceContainerHighest,
+                  ),
+                  child: Text(
+                    groupSchedule?['scheduleEnabled'] == true
+                        ? "ตอนนี้ใช้ตารางเวลาของฟาร์ม: "
+                            "${groupSchedule?['scheduleMode'] == 'block' ? 'ห้ามรด' : 'รดได้'} "
+                            "${groupSchedule?['scheduleStart']}-${groupSchedule?['scheduleEnd']}"
+                        : "ฟาร์มยังไม่ได้ตั้งตารางเวลาไว้ — อุปกรณ์นี้จะรดน้ำ "
+                            "ตามปกติไม่มีข้อจำกัดเรื่องเวลา",
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+              ],
+              if (useOverride) ...[
+                const SizedBox(height: 4),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text("เปิดใช้ตารางเวลา"),
+                  value: enabled,
+                  onChanged: (v) => setDialogState(() => enabled = v),
+                ),
+              ],
+              if (useOverride && enabled) ...[
                 const SizedBox(height: 4),
                 SegmentedButton<String>(
                   segments: const [
@@ -813,33 +1168,60 @@ class _DeviceCardState extends State<_DeviceCard>
 
     if (saved != true) return;
 
-    final startHHmm = _formatHHmm(start);
-    final endHHmm = _formatHHmm(end);
     // desiredAuto: ถ้ายังไม่เคยมีมาก่อน ให้เริ่มจากค่า Auto ปัจจุบัน กัน
     // ไม่ให้ผู้ใช้เปิดตารางเวลาแล้ว Auto ที่เปิดอยู่ก่อนหน้าหายไปเฉยๆ
     final desiredAuto = data['desiredAuto'] ?? data['Auto'] ?? false;
+
+    final Map<String, dynamic> update = {
+      'scheduleOverride': useOverride,
+      'desiredAuto': desiredAuto,
+    };
+
     bool effective;
-    if (!enabled) {
-      effective = desiredAuto == true;
+    if (useOverride) {
+      final startHHmm = formatHHmm(start);
+      final endHHmm = formatHHmm(end);
+      update['scheduleEnabled'] = enabled;
+      update['scheduleMode'] = mode;
+      update['scheduleStart'] = startHHmm;
+      update['scheduleEnd'] = endHHmm;
+
+      if (!enabled) {
+        effective = desiredAuto == true;
+      } else {
+        final withinWindow = isWithinScheduleWindow(startHHmm, endHHmm);
+        final allowedNow = mode == 'block' ? !withinWindow : withinWindow;
+        effective = desiredAuto == true && allowedNow;
+      }
     } else {
-      final withinWindow = isWithinScheduleWindow(startHHmm, endHHmm);
-      final allowedNow = mode == 'block' ? !withinWindow : withinWindow;
-      effective = desiredAuto == true && allowedNow;
+      // ไม่ override — ใช้ตารางเวลาของฟาร์มที่ดึงมาแสดงไว้ในไดอะล็อกนี้แล้ว
+      if (groupSchedule?['scheduleEnabled'] == true) {
+        final gStart = groupSchedule?['scheduleStart'] as String?;
+        final gEnd = groupSchedule?['scheduleEnd'] as String?;
+        if (gStart != null && gEnd != null) {
+          final withinWindow = isWithinScheduleWindow(gStart, gEnd);
+          final allowedNow = groupSchedule?['scheduleMode'] == 'block'
+              ? !withinWindow
+              : withinWindow;
+          effective = desiredAuto == true && allowedNow;
+        } else {
+          effective = desiredAuto == true;
+        }
+      } else {
+        effective = desiredAuto == true;
+      }
     }
+    update['Auto'] = effective;
+    if (effective) update['Valve'] = false;
 
     // เคยเจอบั๊กจริงมาก่อน: Firestore rule ปฏิเสธ field ใหม่แบบเงียบๆ ไม่มี
     // อะไรโผล่ให้เห็นในแอปเลย ผู้ใช้กดบันทึกแล้วงงว่าทำไมไม่มีอะไรเกิดขึ้น —
     // ต้อง try/catch แล้วแจ้งชัดๆ ทุกครั้งไป ไม่ให้เงียบแบบนั้นอีก
     try {
-      await FirebaseFirestore.instance.collection('ESP32').doc(nanoId).update({
-        'scheduleEnabled': enabled,
-        'scheduleMode': mode,
-        'scheduleStart': startHHmm,
-        'scheduleEnd': endHHmm,
-        'desiredAuto': desiredAuto,
-        'Auto': effective,
-        if (effective) 'Valve': false,
-      });
+      await FirebaseFirestore.instance
+          .collection('ESP32')
+          .doc(nanoId)
+          .update(update);
 
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -869,22 +1251,6 @@ class _DeviceCardState extends State<_DeviceCard>
         SnackBar(content: Text("บันทึกไม่สำเร็จ: $err")),
       );
     }
-  }
-
-  TimeOfDay? _parseHHmm(String? hhmm) {
-    if (hhmm == null) return null;
-    final parts = hhmm.split(':');
-    if (parts.length != 2) return null;
-    final h = int.tryParse(parts[0]);
-    final m = int.tryParse(parts[1]);
-    if (h == null || m == null) return null;
-    return TimeOfDay(hour: h, minute: m);
-  }
-
-  String _formatHHmm(TimeOfDay time) {
-    final h = time.hour.toString().padLeft(2, '0');
-    final m = time.minute.toString().padLeft(2, '0');
-    return '$h:$m';
   }
 
   @override
