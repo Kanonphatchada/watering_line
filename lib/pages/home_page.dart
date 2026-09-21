@@ -14,7 +14,6 @@ import '../widgets/avatar.dart';
 
 // 🔥 [เพิ่ม] สำหรับกลับไปหน้า login
 import 'login_page.dart';
-import '../main.dart';
 
 // ตรงกับ isWithinScheduleWindow ใน functions/checkDevices.js เป๊ะๆ — ใช้ฝั่ง
 // แอปเพื่อให้สวิตช์ Auto ตอบสนองทันทีตอนกด ไม่ต้องรอ backend รอบถัดไป (ทุก
@@ -326,18 +325,6 @@ class _HomePageState extends State<HomePage> {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const AddDevicePage()),
-              );
-            },
-          ),
-          ValueListenableBuilder<ThemeMode>(
-            valueListenable: themeModeNotifier,
-            builder: (context, mode, _) {
-              return IconButton(
-                tooltip: mode == ThemeMode.dark ? "โหมดสว่าง" : "โหมดมืด",
-                icon: Icon(
-                  mode == ThemeMode.dark ? Icons.light_mode : Icons.dark_mode,
-                ),
-                onPressed: toggleThemeMode,
               );
             },
           ),
@@ -761,9 +748,13 @@ class _HomePageState extends State<HomePage> {
                   // มาแล้วจาก stream ด้านบน)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                    // ไม่ใช้ Expanded ให้ช่องค้นหายืดเต็มแถว (ยาวเกินไปเมื่อ
+                    // เทียบกับการ์ดกว้าง 420px ด้านล่าง) จำกัดความกว้างไว้
+                    // แทน ให้ดูเป็นแถบค้นหาปกติ ไม่ใช่แถบยาวพาดตลอดหน้า
                     child: Row(
                       children: [
-                        Expanded(
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 320),
                           child: TextField(
                             controller: _searchController,
                             onChanged: (v) => setState(() => _searchQuery = v),
