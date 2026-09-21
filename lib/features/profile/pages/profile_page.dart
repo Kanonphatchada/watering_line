@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'login_page.dart';
-import '../widgets/avatar.dart';
+import '../../auth/pages/login_page.dart';
+import '../../../shared/widgets/avatar.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
