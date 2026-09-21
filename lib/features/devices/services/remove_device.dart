@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
@@ -132,4 +133,99 @@ Future<void> confirmAndRemoveDevice(BuildContext context, String nanoId) async {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(message)));
   }
+}
+
+// เลือกอุปกรณ์ก่อนลบจากเมนูรวม — ต่างจากปุ่มลบที่เคยอยู่ในการ์ด (ตรงนั้นรู้อยู่แล้ว
+// ว่าจะลบตัวไหน) ตรงนี้ต้องให้เลือกอุปกรณ์ก่อน จึงมีช่องค้นหา+รายชื่อให้กด
+// เลือกในไดอะล็อกนี้ พอเลือกแล้วค่อยไปเข้ากล่องยืนยัน (confirmAndRemoveDevice) ต่อ
+Future<void> openRemoveDevicePicker(
+  BuildContext context,
+  List<QueryDocumentSnapshot> docs,
+) async {
+  if (docs.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("ยังไม่มีอุปกรณ์ให้ลบ")),
+    );
+    return;
+  }
+
+  final pickerQueryController = TextEditingController();
+  final nanoId = await showDialog<String>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) {
+        final q = pickerQueryController.text.trim().toLowerCase();
+        final matches = q.isEmpty
+            ? docs
+            : docs.where((d) => d.id.toLowerCase().contains(q)).toList();
+
+        return AlertDialog(
+          title: const Text("เลือกอุปกรณ์ที่จะลบ"),
+          content: SizedBox(
+            width: 360,
+            height: 400,
+            child: Column(
+              children: [
+                TextField(
+                  controller: pickerQueryController,
+                  autofocus: true,
+                  onChanged: (_) => setDialogState(() {}),
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    hintText: "ค้นหาชื่ออุปกรณ์...",
+                    prefixIcon: Icon(Icons.search, size: 20),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: matches.isEmpty
+                      ? const Center(child: Text("ไม่พบอุปกรณ์"))
+                      : ListView.builder(
+                          itemCount: matches.length,
+                          itemBuilder: (context, index) {
+                            final d = matches[index];
+                            final data = d.data() as Map<String, dynamic>;
+                            return ListTile(
+                              leading: const Icon(Icons.sensors),
+                              title: Text(d.id),
+                              subtitle: data['groupId'] != null
+                                  ? Text("กลุ่ม: ${data['groupId']}")
+                                  : null,
+                              trailing: const Icon(
+                                Icons.delete_outline,
+                                color: Colors.red,
+                              ),
+                              onTap: () => Navigator.pop(context, d.id),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("ปิด"),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+
+  // ห้าม dispose ทันทีตรงนี้ — Future ของ showDialog จะ resolve ทันทีที่
+  // Navigator.pop() เรียก แต่ dialog ยังเล่น animation ปิดอยู่บนจอ (TextField
+  // ที่ผูกกับ controller นี้ยังอยู่ใน tree ระหว่าง transition) การ dispose
+  // ตอนนั้นเลยไปโดน TextField ที่ยังไม่ถูกถอดออกจาก tree จริงๆ ทำให้ Flutter
+  // แจ้ง assertion "_dependents.isEmpty is not true" แครชขึ้นจอแดง — เลื่อน
+  // ไปทำหลัง frame ปัจจุบันจบก่อน ให้ transition มีเวลาเคลียร์ตัวเองก่อน
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    pickerQueryController.dispose();
+  });
+
+  if (nanoId == null) return;
+  if (!context.mounted) return;
+
+  await confirmAndRemoveDevice(context, nanoId);
 }
