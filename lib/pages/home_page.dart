@@ -1196,44 +1196,26 @@ class _DeviceCardState extends State<_DeviceCard>
                       },
                     ),
                   ),
-                  // ซ่อนตัวเลือกลบไว้หลังเมนู ไม่ใช่ปุ่มถังขยะสีแดงลอยเด่น
-                  // เพราะกลัวกดโดนโดยไม่ตั้งใจ — ต้องกดเปิดเมนูก่อน แล้วค่อย
-                  // เลือก "ลบอุปกรณ์" แล้วค่อยกดยืนยันอีกที รวม 3 ขั้นตอน
-                  PopupMenuButton<String>(
-                    tooltip: "ตัวเลือกเพิ่มเติม",
-                    icon: const Icon(Icons.more_vert),
-                    onSelected: (value) {
-                      if (value == 'remove') {
-                        _confirmAndRemoveDevice(context);
-                      } else if (value == 'schedule') {
-                        _openScheduleDialog(context, nanoId, data);
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'schedule',
-                        child: Row(
-                          children: [
-                            Icon(Icons.schedule),
-                            SizedBox(width: 8),
-                            Text("ตั้งเวลารดน้ำ"),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'remove',
-                        child: Row(
-                          children: [
-                            Icon(Icons.delete_outline, color: Colors.red),
-                            SizedBox(width: 8),
-                            Text(
-                              "ลบอุปกรณ์",
-                              style: TextStyle(color: Colors.red),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                  // เดิมซ่อนไว้หลังเมนู "⋮" ทำให้หาไม่เจอ + ดูไม่สมูธเพราะปุ่ม
+                  // เล็กแปลกๆ อยู่ปนกับปุ่มใหญ่ 3 ปุ่ม — ย้ายมาเป็นปุ่มแบบ
+                  // เดียวกันเลย ให้เห็นชัดว่ากดตั้งเวลาได้ พร้อมจุดเขียวบอกว่า
+                  // ตั้งไว้แล้วหรือยัง
+                  Expanded(
+                    child: _ActionButton(
+                      icon: Icons.schedule,
+                      label: "ตั้งเวลา",
+                      showBadge: data['scheduleEnabled'] == true,
+                      onTap: () => _openScheduleDialog(context, nanoId, data),
+                    ),
+                  ),
+                  // ลบอุปกรณ์ยังคงแยกไว้ต่างหาก (ไม่ใช่ปุ่มใหญ่เท่ากัน) เพราะ
+                  // เป็นการกระทำที่ทำน้อยและย้อนกลับยาก แต่ยังต้องกดยืนยันอีก
+                  // ชั้นก่อนลบจริงอยู่ดี (ดู _confirmAndRemoveDevice)
+                  IconButton(
+                    tooltip: "ลบอุปกรณ์",
+                    icon: const Icon(Icons.delete_outline,
+                        color: Colors.red, size: 20),
+                    onPressed: () => _confirmAndRemoveDevice(context),
                   ),
                 ],
               ),
@@ -1611,11 +1593,15 @@ class _ActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  // จุดเขียวเล็กๆ บอกว่าปุ่มนี้มีการตั้งค่าเปิดใช้อยู่ (เช่น ตั้งเวลารดน้ำ
+  // ไว้แล้ว) ให้เห็นชัดเจนโดยไม่ต้องกดเข้าไปดูก่อน
+  final bool showBadge;
 
   const _ActionButton({
     required this.icon,
     required this.label,
     required this.onTap,
+    this.showBadge = false,
   });
 
   @override
@@ -1627,7 +1613,25 @@ class _ActionButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Column(
           children: [
-            Icon(icon, size: 20, color: const Color(0xFF2E7D32)),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(icon, size: 20, color: const Color(0xFF2E7D32)),
+                if (showBadge)
+                  Positioned(
+                    right: -2,
+                    top: -2,
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: Colors.green,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
             const SizedBox(height: 4),
             Text(
               label,
