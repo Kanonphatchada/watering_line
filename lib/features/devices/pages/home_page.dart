@@ -4,8 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'add_device_page.dart';
 import '../../profile/pages/profile_page.dart';
 import '../../../shared/widgets/avatar.dart';
-import '../../auth/pages/login_page.dart';
-import '../../../main.dart';
+import '../services/farm_schedule.dart';
+import '../services/remove_device.dart';
 import '../widgets/device_card.dart';
 import '../widgets/home_summary_widgets.dart';
 
@@ -20,6 +20,20 @@ class _HomePageState extends State<HomePage> {
   // กันไม่ให้ popup แจ้งเตือนอุปกรณ์มีปัญหาเด้งซ้ำทุกครั้งที่ stream ยิง
   // ค่าใหม่มา — โชว์แค่ครั้งเดียวต่อการเปิดหน้านี้หนึ่งรอบ
   bool _alertShown = false;
+
+  // ค้นหาอุปกรณ์ด้วยชื่อ — กรองแค่ตอนแสดงผลกริดเท่านั้น (ไม่กรองตัวเลขสรุป/
+  // popup แจ้งเตือนด้านบน ให้ยังนับครบทุกอุปกรณ์เหมือนเดิมไม่ว่าจะค้นหาอะไร)
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+  // ซ่อนช่องค้นหาไว้โดย default ตอนนี้ — เปิด/ปิดผ่านเมนูรวมใน AppBar แทน
+  // การโชว์ถาวรเหมือนก่อนหน้านี้
+  bool _searchBarVisible = false;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,31 +50,6 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
         actions: [
-          // ปุ่มเพิ่มอุปกรณ์ถาวรใน AppBar — เมื่อก่อนมีทางเข้าหน้า
-          // AddDevicePage แค่ตอนยังไม่มีอุปกรณ์เลยสักตัว (empty state) พอมี
-          // อุปกรณ์แรกแล้วหาทางเพิ่มเครื่องที่ 2 ไม่เจอเลย
-          IconButton(
-            tooltip: "เพิ่มอุปกรณ์",
-            icon: const Icon(Icons.add_circle_outline_rounded),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AddDevicePage()),
-              );
-            },
-          ),
-          ValueListenableBuilder<ThemeMode>(
-            valueListenable: themeModeNotifier,
-            builder: (context, mode, _) {
-              return IconButton(
-                tooltip: mode == ThemeMode.dark ? "โหมดสว่าง" : "โหมดมืด",
-                icon: Icon(
-                  mode == ThemeMode.dark ? Icons.light_mode : Icons.dark_mode,
-                ),
-                onPressed: toggleThemeMode,
-              );
-            },
-          ),
           IconButton(
             icon: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -274,49 +263,87 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                     ),
-
-                    // 🔥 =========================
-                    // 🔥 [เพิ่ม] ปุ่ม LOGOUT
-                    // 🔥 =========================
-                    IconButton(
-                      icon: const Icon(Icons.logout),
-                      onPressed: () async {
-                        // 🔥 popup ยืนยัน
-                        final confirm = await showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text("ยืนยัน"),
-                            content: const Text("ต้องการออกจากระบบหรือไม่"),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, false),
-                                child: const Text("ยกเลิก"),
-                              ),
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, true),
-                                child: const Text("ออก"),
-                              ),
-                            ],
-                          ),
-                        );
-
-                        // 🔥 ถ้ากดยืนยัน
-                        if (confirm == true) {
-                          await FirebaseAuth.instance.signOut();
-
-                          if (!context.mounted) return;
-
-                          Navigator.pushAndRemoveUntil(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => const LoginPage()),
-                            (route) => false,
-                          );
-                        }
-                      },
-                    ),
+                    // ปุ่มออกจากระบบเดิมอยู่ตรงนี้ — ย้ายไปไว้ในหน้าโปรไฟล์
+                    // (ProfilePage มีอยู่แล้ว) ไม่ต้องมีซ้ำ 2 ที่
                   ],
                 ),
+              );
+            },
+          ),
+          // เมนูรวม — เดิมมี "เพิ่มอุปกรณ์" เป็นปุ่มแยก + "ตั้งเวลาทั้งฟาร์ม"
+          // กับช่องค้นหาอยู่อีกแถวใต้แถบสรุป รวมเข้าเมนูเดียวให้ดูเป็น
+          // ระเบียบขึ้น ต้องครอบด้วย StreamBuilder ของตัวเองเพราะ AppBar
+          // สร้างก่อน StreamBuilder หลักของหน้า (ที่มี docs) จะยังไม่มีข้อมูล
+          // — ย้ายมาไว้ขวาสุดของแถบ (หลังไอคอนโปรไฟล์) ตามที่ขอ
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('ESP32')
+                .where('uid', isEqualTo: uid)
+                .snapshots(),
+            builder: (context, menuSnapshot) {
+              final menuDocs = menuSnapshot.data?.docs ?? [];
+              return PopupMenuButton<String>(
+                tooltip: "เมนู",
+                icon: const Icon(Icons.menu),
+                onSelected: (value) {
+                  switch (value) {
+                    case 'add':
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AddDevicePage(),
+                        ),
+                      );
+                    case 'schedule':
+                      openFarmScheduleDialog(context, menuDocs);
+                    case 'search':
+                      setState(() => _searchBarVisible = !_searchBarVisible);
+                    case 'remove':
+                      openRemoveDevicePicker(context, menuDocs);
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'add',
+                    child: Row(
+                      children: [
+                        Icon(Icons.add_circle_outline_rounded),
+                        SizedBox(width: 8),
+                        Text("เพิ่มอุปกรณ์"),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'schedule',
+                    child: Row(
+                      children: [
+                        Icon(Icons.schedule),
+                        SizedBox(width: 8),
+                        Text("ตั้งเวลาทั้งฟาร์ม"),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'search',
+                    child: Row(
+                      children: [
+                        Icon(Icons.search),
+                        SizedBox(width: 8),
+                        Text("ค้นหาอุปกรณ์"),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'remove',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete_outline, color: Colors.red),
+                        SizedBox(width: 8),
+                        Text("ลบอุปกรณ์", style: TextStyle(color: Colors.red)),
+                      ],
+                    ),
+                  ),
+                ],
               );
             },
           ),
@@ -458,6 +485,13 @@ class _HomePageState extends State<HomePage> {
             });
           }
 
+          // กรองแค่ตอนแสดงกริดเท่านั้น — ตัวเลขสรุป/popup ด้านบนยังนับจาก
+          // docs เต็มทุกตัวเสมอ ไม่ว่าจะค้นหาอะไรอยู่ก็ตาม
+          final query = _searchQuery.trim().toLowerCase();
+          final filteredDocs = query.isEmpty
+              ? docs
+              : docs.where((d) => d.id.toLowerCase().contains(query)).toList();
+
           return Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 1100),
@@ -468,29 +502,75 @@ class _HomePageState extends State<HomePage> {
                     alertCount: alertCount,
                     avgMoisture: avgMoisture,
                   ),
-                  Expanded(
-                    child: GridView.builder(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      gridDelegate:
-                          const SliverGridDelegateWithMaxCrossAxisExtent(
-                        maxCrossAxisExtent: 420,
-                        mainAxisExtent: 480,
-                        mainAxisSpacing: 16,
-                        crossAxisSpacing: 16,
+                  // ค้นหาอุปกรณ์ — จำเป็นตอนมีอุปกรณ์เยอะ (เช่น เป็นร้อยตัว)
+                  // เลื่อนหาทีละใบไม่ไหว ตอนนี้ซ่อนไว้โดย default เปิด/ปิดผ่าน
+                  // เมนูรวมใน AppBar แทน ("ตั้งเวลาทั้งฟาร์ม"/"ลบอุปกรณ์" ย้าย
+                  // ไปอยู่ในเมนูรวมแล้ว ไม่ต้องมีปุ่มแยกอยู่แถวนี้อีก)
+                  if (_searchBarVisible)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                      // ไม่ใช้ Expanded ให้ช่องค้นหายืดเต็มแถว (ยาวเกินไปเมื่อ
+                      // เทียบกับการ์ดกว้าง 420px ด้านล่าง) จำกัดความกว้างไว้
+                      // แทน ให้ดูเป็นแถบค้นหาปกติ ไม่ใช่แถบยาวพาดตลอดหน้า
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 320),
+                        child: TextField(
+                          controller: _searchController,
+                          autofocus: true,
+                          onChanged: (v) => setState(() => _searchQuery = v),
+                          decoration: InputDecoration(
+                            isDense: true,
+                            hintText: "ค้นหาชื่ออุปกรณ์...",
+                            prefixIcon: const Icon(Icons.search, size: 20),
+                            suffixIcon: IconButton(
+                              icon: const Icon(Icons.close, size: 18),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() {
+                                  _searchQuery = '';
+                                  _searchBarVisible = false;
+                                });
+                              },
+                            ),
+                          ),
+                        ),
                       ),
-                      itemCount: docs.length,
-                      itemBuilder: (context, index) {
-                        final doc = docs[index];
-                        final data = doc.data() as Map<String, dynamic>;
-
-                        return DeviceCard(
-                          key: ValueKey(doc.id),
-                          nanoId: doc.id,
-                          data: data,
-                          index: index,
-                        );
-                      },
                     ),
+                  Expanded(
+                    child: filteredDocs.isEmpty
+                        ? Center(
+                            child: Text(
+                              "ไม่พบอุปกรณ์ที่ตรงกับ \"$_searchQuery\"",
+                              style: TextStyle(
+                                color: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.color,
+                              ),
+                            ),
+                          )
+                        : GridView.builder(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            gridDelegate:
+                                const SliverGridDelegateWithMaxCrossAxisExtent(
+                              maxCrossAxisExtent: 420,
+                              mainAxisExtent: 420,
+                              mainAxisSpacing: 16,
+                              crossAxisSpacing: 16,
+                            ),
+                            itemCount: filteredDocs.length,
+                            itemBuilder: (context, index) {
+                              final doc = filteredDocs[index];
+                              final data = doc.data() as Map<String, dynamic>;
+
+                              return DeviceCard(
+                                key: ValueKey(doc.id),
+                                nanoId: doc.id,
+                                data: data,
+                                index: index,
+                              );
+                            },
+                          ),
                   ),
                 ],
               ),
