@@ -53,6 +53,106 @@ String formatHHmm(TimeOfDay time) {
   return '$h:$m';
 }
 
+// ยกเลิกการผูกอุปกรณ์ (ลบออกจากบัญชีตัวเอง ไม่ได้ลบ document ทิ้ง) — ยิงผ่าน
+// backend route /unclaim-device ด้วย Firebase ID token แทนที่จะเขียน
+// Firestore ตรงๆ จากฝั่ง client เพื่อไม่ต้องเปิด rule เพิ่มให้ client เคลียร์
+// uid/ownerUid เอง เป็น top-level function ไม่ใช่ method ของ _DeviceCardState
+// เพราะเรียกใช้ได้ทั้งจากปุ่มลบในการ์ด และจากเมนูรวมที่เลือกอุปกรณ์ก่อนลบ
+Future<void> confirmAndRemoveDevice(BuildContext context, String nanoId) async {
+  final confirm = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      icon: Container(
+        width: 56,
+        height: 56,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.red.withValues(alpha: 0.1),
+        ),
+        child: const Icon(
+          Icons.warning_amber_rounded,
+          color: Colors.red,
+          size: 30,
+        ),
+      ),
+      title: const Text(
+        "ลบอุปกรณ์นี้?",
+        textAlign: TextAlign.center,
+      ),
+      content: Text(
+        "จะยกเลิกการผูก \"$nanoId\" กับบัญชีนี้ "
+        "ต้องเชื่อมต่อใหม่ด้วย Device ID/Password ถึงจะใช้งานได้อีกครั้ง",
+        textAlign: TextAlign.center,
+      ),
+      actionsAlignment: MainAxisAlignment.spaceBetween,
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text("ยกเลิก"),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: Colors.red),
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text("ลบอุปกรณ์"),
+        ),
+      ],
+    ),
+  );
+
+  if (confirm != true) return;
+  if (!context.mounted) return;
+
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return;
+
+  try {
+    final idToken = await user.getIdToken();
+    final res = await http.post(
+      Uri.parse("https://line-auth-server.onrender.com/unclaim-device"),
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer $idToken",
+      },
+      body: jsonEncode({"nanoId": nanoId}),
+    );
+
+    if (!context.mounted) return;
+
+    if (res.statusCode == 200) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: const Color(0xFF2E7D32),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+          content: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.check_circle, color: Colors.white, size: 20),
+              SizedBox(width: 10),
+              Text(
+                "ลบอุปกรณ์แล้ว",
+                style:
+                    TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("ลบอุปกรณ์ไม่สำเร็จ ลองใหม่อีกครั้ง")),
+      );
+    }
+  } catch (err) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("ลบอุปกรณ์ไม่สำเร็จ ลองใหม่อีกครั้ง")),
+    );
+  }
+}
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -69,11 +169,101 @@ class _HomePageState extends State<HomePage> {
   // popup แจ้งเตือนด้านบน ให้ยังนับครบทุกอุปกรณ์เหมือนเดิมไม่ว่าจะค้นหาอะไร)
   final _searchController = TextEditingController();
   String _searchQuery = '';
+  // ซ่อนช่องค้นหาไว้โดย default ตอนนี้ — เปิด/ปิดผ่านเมนูรวมใน AppBar แทน
+  // การโชว์ถาวรเหมือนก่อนหน้านี้
+  bool _searchBarVisible = false;
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  // ลบอุปกรณ์จากเมนูรวม — ต่างจากปุ่มลบที่เคยอยู่ในการ์ด (ตรงนั้นรู้อยู่แล้ว
+  // ว่าจะลบตัวไหน) ตรงนี้ต้องให้เลือกอุปกรณ์ก่อน จึงมีช่องค้นหา+รายชื่อให้กด
+  // เลือกในไดอะล็อกนี้ พอเลือกแล้วค่อยไปเข้ากล่องยืนยันเดิม
+  // (confirmAndRemoveDevice) ต่อ
+  Future<void> _openRemoveDevicePicker(
+    BuildContext context,
+    List<QueryDocumentSnapshot> docs,
+  ) async {
+    if (docs.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("ยังไม่มีอุปกรณ์ให้ลบ")),
+      );
+      return;
+    }
+
+    final pickerQueryController = TextEditingController();
+    final nanoId = await showDialog<String>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final q = pickerQueryController.text.trim().toLowerCase();
+          final matches = q.isEmpty
+              ? docs
+              : docs.where((d) => d.id.toLowerCase().contains(q)).toList();
+
+          return AlertDialog(
+            title: const Text("เลือกอุปกรณ์ที่จะลบ"),
+            content: SizedBox(
+              width: 360,
+              height: 400,
+              child: Column(
+                children: [
+                  TextField(
+                    controller: pickerQueryController,
+                    autofocus: true,
+                    onChanged: (_) => setDialogState(() {}),
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      hintText: "ค้นหาชื่ออุปกรณ์...",
+                      prefixIcon: Icon(Icons.search, size: 20),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: matches.isEmpty
+                        ? const Center(child: Text("ไม่พบอุปกรณ์"))
+                        : ListView.builder(
+                            itemCount: matches.length,
+                            itemBuilder: (context, index) {
+                              final d = matches[index];
+                              final data = d.data() as Map<String, dynamic>;
+                              return ListTile(
+                                leading: const Icon(Icons.sensors),
+                                title: Text(d.id),
+                                subtitle: data['groupId'] != null
+                                    ? Text("กลุ่ม: ${data['groupId']}")
+                                    : null,
+                                trailing: const Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.red,
+                                ),
+                                onTap: () => Navigator.pop(context, d.id),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("ปิด"),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    pickerQueryController.dispose();
+    if (nanoId == null) return;
+    if (!context.mounted) return;
+
+    await confirmAndRemoveDevice(context, nanoId);
   }
 
   // ตั้งเวลารดน้ำทั้งกลุ่ม/ฟาร์มในครั้งเดียว — ให้ทุกอุปกรณ์ในกลุ่มเดียวกัน
@@ -315,16 +505,79 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
         actions: [
-          // ปุ่มเพิ่มอุปกรณ์ถาวรใน AppBar — เมื่อก่อนมีทางเข้าหน้า
-          // AddDevicePage แค่ตอนยังไม่มีอุปกรณ์เลยสักตัว (empty state) พอมี
-          // อุปกรณ์แรกแล้วหาทางเพิ่มเครื่องที่ 2 ไม่เจอเลย
-          IconButton(
-            tooltip: "เพิ่มอุปกรณ์",
-            icon: const Icon(Icons.add_circle_outline_rounded),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AddDevicePage()),
+          // เมนูรวม — เดิมมี "เพิ่มอุปกรณ์" เป็นปุ่มแยก + "ตั้งเวลาทั้งฟาร์ม"
+          // กับช่องค้นหาอยู่อีกแถวใต้แถบสรุป รวมเข้าเมนูเดียวให้ดูเป็น
+          // ระเบียบขึ้น ต้องครอบด้วย StreamBuilder ของตัวเองเพราะ AppBar
+          // สร้างก่อน StreamBuilder หลักของหน้า (ที่มี docs) จะยังไม่มีข้อมูล
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('ESP32')
+                .where('uid', isEqualTo: uid)
+                .snapshots(),
+            builder: (context, menuSnapshot) {
+              final menuDocs = menuSnapshot.data?.docs ?? [];
+              return PopupMenuButton<String>(
+                tooltip: "เมนู",
+                icon: const Icon(Icons.menu),
+                onSelected: (value) {
+                  switch (value) {
+                    case 'add':
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AddDevicePage(),
+                        ),
+                      );
+                    case 'schedule':
+                      _openFarmScheduleDialog(context, menuDocs);
+                    case 'search':
+                      setState(() => _searchBarVisible = !_searchBarVisible);
+                    case 'remove':
+                      _openRemoveDevicePicker(context, menuDocs);
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'add',
+                    child: Row(
+                      children: [
+                        Icon(Icons.add_circle_outline_rounded),
+                        SizedBox(width: 8),
+                        Text("เพิ่มอุปกรณ์"),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'schedule',
+                    child: Row(
+                      children: [
+                        Icon(Icons.schedule),
+                        SizedBox(width: 8),
+                        Text("ตั้งเวลาทั้งฟาร์ม"),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'search',
+                    child: Row(
+                      children: [
+                        Icon(Icons.search),
+                        SizedBox(width: 8),
+                        Text("ค้นหาอุปกรณ์"),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'remove',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete_outline, color: Colors.red),
+                        SizedBox(width: 8),
+                        Text("ลบอุปกรณ์", style: TextStyle(color: Colors.red)),
+                      ],
+                    ),
+                  ),
+                ],
               );
             },
           ),
@@ -743,49 +996,39 @@ class _HomePageState extends State<HomePage> {
                     avgMoisture: avgMoisture,
                   ),
                   // ค้นหาอุปกรณ์ — จำเป็นตอนมีอุปกรณ์เยอะ (เช่น เป็นร้อยตัว)
-                  // เลื่อนหาทีละใบไม่ไหว + ปุ่มตั้งเวลาทั้งฟาร์มไว้ข้างๆ
-                  // (ต้องวางแถวนี้ ไม่ใช่ AppBar เพราะต้องใช้ docs ที่โหลด
-                  // มาแล้วจาก stream ด้านบน)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                    // ไม่ใช้ Expanded ให้ช่องค้นหายืดเต็มแถว (ยาวเกินไปเมื่อ
-                    // เทียบกับการ์ดกว้าง 420px ด้านล่าง) จำกัดความกว้างไว้
-                    // แทน ให้ดูเป็นแถบค้นหาปกติ ไม่ใช่แถบยาวพาดตลอดหน้า
-                    child: Row(
-                      children: [
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 320),
-                          child: TextField(
-                            controller: _searchController,
-                            onChanged: (v) => setState(() => _searchQuery = v),
-                            decoration: InputDecoration(
-                              isDense: true,
-                              hintText: "ค้นหาชื่ออุปกรณ์...",
-                              prefixIcon: const Icon(Icons.search, size: 20),
-                              suffixIcon: _searchQuery.isEmpty
-                                  ? null
-                                  : IconButton(
-                                      icon: const Icon(Icons.clear, size: 18),
-                                      onPressed: () {
-                                        _searchController.clear();
-                                        setState(() => _searchQuery = '');
-                                      },
-                                    ),
+                  // เลื่อนหาทีละใบไม่ไหว ตอนนี้ซ่อนไว้โดย default เปิด/ปิดผ่าน
+                  // เมนูรวมใน AppBar แทน ("ตั้งเวลาทั้งฟาร์ม"/"ลบอุปกรณ์" ย้าย
+                  // ไปอยู่ในเมนูรวมแล้ว ไม่ต้องมีปุ่มแยกอยู่แถวนี้อีก)
+                  if (_searchBarVisible)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                      // ไม่ใช้ Expanded ให้ช่องค้นหายืดเต็มแถว (ยาวเกินไปเมื่อ
+                      // เทียบกับการ์ดกว้าง 420px ด้านล่าง) จำกัดความกว้างไว้
+                      // แทน ให้ดูเป็นแถบค้นหาปกติ ไม่ใช่แถบยาวพาดตลอดหน้า
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 320),
+                        child: TextField(
+                          controller: _searchController,
+                          autofocus: true,
+                          onChanged: (v) => setState(() => _searchQuery = v),
+                          decoration: InputDecoration(
+                            isDense: true,
+                            hintText: "ค้นหาชื่ออุปกรณ์...",
+                            prefixIcon: const Icon(Icons.search, size: 20),
+                            suffixIcon: IconButton(
+                              icon: const Icon(Icons.close, size: 18),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() {
+                                  _searchQuery = '';
+                                  _searchBarVisible = false;
+                                });
+                              },
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        IconButton.filledTonal(
-                          tooltip: "ตั้งเวลารดน้ำทั้งฟาร์ม",
-                          icon: const Icon(Icons.schedule),
-                          onPressed: () => _openFarmScheduleDialog(
-                            context,
-                            docs,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
                   Expanded(
                     child: filteredDocs.isEmpty
                         ? Center(
@@ -910,101 +1153,6 @@ class _DeviceCardState extends State<_DeviceCard>
   // backend route /unclaim-device ด้วย Firebase ID token แทนที่จะเขียน
   // Firestore ตรงๆ จาก client เพื่อไม่ต้องเปิด rule เพิ่มให้ client เคลียร์
   // uid/ownerUid เอง (ดูเหตุผลเต็มๆ ที่ index.js)
-  Future<void> _confirmAndRemoveDevice(BuildContext context) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        icon: Container(
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.red.withValues(alpha: 0.1),
-          ),
-          child: const Icon(
-            Icons.warning_amber_rounded,
-            color: Colors.red,
-            size: 30,
-          ),
-        ),
-        title: const Text(
-          "ลบอุปกรณ์นี้?",
-          textAlign: TextAlign.center,
-        ),
-        content: Text(
-          "จะยกเลิกการผูก \"${widget.nanoId}\" กับบัญชีนี้ "
-          "ต้องเชื่อมต่อใหม่ด้วย Device ID/Password ถึงจะใช้งานได้อีกครั้ง",
-          textAlign: TextAlign.center,
-        ),
-        actionsAlignment: MainAxisAlignment.spaceBetween,
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("ยกเลิก"),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text("ลบอุปกรณ์"),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-    if (!context.mounted) return;
-
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    try {
-      final idToken = await user.getIdToken();
-      final res = await http.post(
-        Uri.parse("https://line-auth-server.onrender.com/unclaim-device"),
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer $idToken",
-        },
-        body: jsonEncode({"nanoId": widget.nanoId}),
-      );
-
-      if (!context.mounted) return;
-
-      if (res.statusCode == 200) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: const Color(0xFF2E7D32),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            margin: const EdgeInsets.all(16),
-            content: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.check_circle, color: Colors.white, size: 20),
-                SizedBox(width: 10),
-                Text(
-                  "ลบอุปกรณ์แล้ว",
-                  style: TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.w600),
-                ),
-              ],
-            ),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("ลบอุปกรณ์ไม่สำเร็จ ลองใหม่อีกครั้ง")),
-        );
-      }
-    } catch (err) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("ลบอุปกรณ์ไม่สำเร็จ ลองใหม่อีกครั้ง")),
-      );
-    }
-  }
-
   // ตั้งค่าตารางเวลารดน้ำอัตโนมัติ — ปิดอยู่โดย default ต่ออุปกรณ์ ไม่กระทบ
   // อุปกรณ์ที่ไม่ได้เปิดใช้เลย พอกด "บันทึก" จะคำนวณ Auto ที่แท้จริงใหม่
   // ทันที (ไม่ต้องรอ backend รอบถัดไป) ให้เห็นผลตรงกับที่ตั้งค่าไว้เลย
@@ -1634,7 +1782,9 @@ class _DeviceCardState extends State<_DeviceCard>
                   // เดิมซ่อนไว้หลังเมนู "⋮" ทำให้หาไม่เจอ + ดูไม่สมูธเพราะปุ่ม
                   // เล็กแปลกๆ อยู่ปนกับปุ่มใหญ่ 3 ปุ่ม — ย้ายมาเป็นปุ่มแบบ
                   // เดียวกันเลย ให้เห็นชัดว่ากดตั้งเวลาได้ พร้อมจุดเขียวบอกว่า
-                  // ตั้งไว้แล้วหรือยัง
+                  // ตั้งไว้แล้วหรือยัง (อันนี้ยังอยู่ที่การ์ดเหมือนเดิม เพราะ
+                  // เป็นการตั้งค่าเฉพาะอุปกรณ์นี้ — ต่างจาก "ลบอุปกรณ์" ที่ย้าย
+                  // ไปรวมอยู่ในเมนูรวมของหน้าหลักแทนแล้ว)
                   Expanded(
                     child: _ActionButton(
                       icon: Icons.schedule,
@@ -1642,15 +1792,6 @@ class _DeviceCardState extends State<_DeviceCard>
                       showBadge: data['scheduleEnabled'] == true,
                       onTap: () => _openScheduleDialog(context, nanoId, data),
                     ),
-                  ),
-                  // ลบอุปกรณ์ยังคงแยกไว้ต่างหาก (ไม่ใช่ปุ่มใหญ่เท่ากัน) เพราะ
-                  // เป็นการกระทำที่ทำน้อยและย้อนกลับยาก แต่ยังต้องกดยืนยันอีก
-                  // ชั้นก่อนลบจริงอยู่ดี (ดู _confirmAndRemoveDevice)
-                  IconButton(
-                    tooltip: "ลบอุปกรณ์",
-                    icon: const Icon(Icons.delete_outline,
-                        color: Colors.red, size: 20),
-                    onPressed: () => _confirmAndRemoveDevice(context),
                   ),
                 ],
               ),
