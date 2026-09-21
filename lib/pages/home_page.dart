@@ -827,15 +827,48 @@ class _DeviceCardState extends State<_DeviceCard>
       effective = desiredAuto == true && allowedNow;
     }
 
-    await FirebaseFirestore.instance.collection('ESP32').doc(nanoId).update({
-      'scheduleEnabled': enabled,
-      'scheduleMode': mode,
-      'scheduleStart': startHHmm,
-      'scheduleEnd': endHHmm,
-      'desiredAuto': desiredAuto,
-      'Auto': effective,
-      if (effective) 'Valve': false,
-    });
+    // เคยเจอบั๊กจริงมาก่อน: Firestore rule ปฏิเสธ field ใหม่แบบเงียบๆ ไม่มี
+    // อะไรโผล่ให้เห็นในแอปเลย ผู้ใช้กดบันทึกแล้วงงว่าทำไมไม่มีอะไรเกิดขึ้น —
+    // ต้อง try/catch แล้วแจ้งชัดๆ ทุกครั้งไป ไม่ให้เงียบแบบนั้นอีก
+    try {
+      await FirebaseFirestore.instance.collection('ESP32').doc(nanoId).update({
+        'scheduleEnabled': enabled,
+        'scheduleMode': mode,
+        'scheduleStart': startHHmm,
+        'scheduleEnd': endHHmm,
+        'desiredAuto': desiredAuto,
+        'Auto': effective,
+        if (effective) 'Valve': false,
+      });
+
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: const Color(0xFF2E7D32),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+          content: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.check_circle, color: Colors.white, size: 20),
+              SizedBox(width: 10),
+              Text(
+                "บันทึกตารางเวลาแล้ว",
+                style:
+                    TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+      );
+    } catch (err) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("บันทึกไม่สำเร็จ: $err")),
+      );
+    }
   }
 
   TimeOfDay? _parseHHmm(String? hhmm) {
