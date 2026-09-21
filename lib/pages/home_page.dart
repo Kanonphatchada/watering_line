@@ -1368,393 +1368,406 @@ class _DeviceCardState extends State<_DeviceCard>
         padding: const EdgeInsets.all(18),
         // การ์ดทุกใบสูงเท่ากันตายตัว (กำหนดจาก GridView) — ห่อด้วย
         // SingleChildScrollView กันไว้ ถ้าเนื้อหาในอนาคตยาวเกินพื้นที่การ์ด
-        // จะแค่ scroll ข้างในการ์ดเอง ไม่มีทาง overflow ล้นออกมาอีก
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: isOffline
-                          ? Colors.grey.shade200
-                          : (hasValveFault
-                              ? Colors.orange.shade50
-                              : (isAlert
-                                  ? Colors.red.shade50
-                                  : const Color(0xFFE8F5E9))),
+        // จะแค่ scroll ข้างในการ์ดเอง ไม่มีทาง overflow ล้นออกมาอีก — ปิด
+        // scrollbar ที่โผล่มาด้วย (ตอนนี้เนื้อหาพอดีการ์ดอยู่แล้ว ไม่มีอะไร
+        // ต้องเลื่อนจริงๆ) ยังคง scroll ได้เผื่ออนาคตเนื้อหายาวขึ้น แค่ไม่โชว์
+        // แถบ scrollbar ให้เกะกะ
+        child: ScrollConfiguration(
+          behavior: ScrollConfiguration.of(context).copyWith(
+            scrollbars: false,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isOffline
+                            ? Colors.grey.shade200
+                            : (hasValveFault
+                                ? Colors.orange.shade50
+                                : (isAlert
+                                    ? Colors.red.shade50
+                                    : const Color(0xFFE8F5E9))),
+                      ),
+                      child: Icon(
+                        isOffline
+                            ? Icons.cloud_off
+                            : (hasValveFault
+                                ? Icons.report_problem_outlined
+                                : Icons.water_drop),
+                        color: isOffline
+                            ? Colors.grey.shade600
+                            : (hasValveFault
+                                ? Colors.orange.shade800
+                                : (isAlert
+                                    ? Colors.red
+                                    : const Color(0xFF2E7D32))),
+                      ),
                     ),
-                    child: Icon(
-                      isOffline
-                          ? Icons.cloud_off
-                          : (hasValveFault
-                              ? Icons.report_problem_outlined
-                              : Icons.water_drop),
-                      color: isOffline
-                          ? Colors.grey.shade600
-                          : (hasValveFault
-                              ? Colors.orange.shade800
-                              : (isAlert
-                                  ? Colors.red
-                                  : const Color(0xFF2E7D32))),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          nanoId,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        if (data['groupId'] != null)
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Text(
-                            "กลุ่ม: ${data['groupId']}",
-                            style: TextStyle(
-                              fontSize: 12,
-                              color:
-                                  Theme.of(context).textTheme.bodySmall?.color,
+                            nanoId,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                        const SizedBox(height: 2),
-                        _LastUpdatedText(
-                          nanoId: nanoId,
-                          lastSeen: data['lastSeen'] as Timestamp?,
-                        ),
-                      ],
-                    ),
-                  ),
-                  _StatusChip(
-                    isAlert: isAlert,
-                    isOffline: isOffline,
-                    faultType: faultType,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              _MoistureSparkline(nanoId: nanoId),
-              const SizedBox(height: 12),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                decoration: BoxDecoration(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .surfaceContainerHighest
-                      .withValues(alpha: 0.4),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _MoistureGauge(
-                        moisture: data['Moisture'] as num?,
-                        target: currentTarget,
-                        isOffline: isOffline,
+                          if (data['groupId'] != null)
+                            Text(
+                              "กลุ่ม: ${data['groupId']}",
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.color,
+                              ),
+                            ),
+                          const SizedBox(height: 2),
+                          _LastUpdatedText(
+                            nanoId: nanoId,
+                            lastSeen: data['lastSeen'] as Timestamp?,
+                          ),
+                        ],
                       ),
                     ),
-                    const _StatDivider(),
-                    Expanded(
-                      child: _StatTile(
-                        icon: Icons.flag,
-                        label: "Target",
-                        value: currentTarget.toString(),
-                      ),
-                    ),
-                    const _StatDivider(),
-                    Expanded(
-                      child: _StatTile(
-                        icon: Icons.schedule,
-                        label: "Time",
-                        value: "${data['Time'] ?? '-'}",
-                      ),
+                    _StatusChip(
+                      isAlert: isAlert,
+                      isOffline: isOffline,
+                      faultType: faultType,
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: _ControlChip(
-                      label: "Auto",
-                      icon: Icons.auto_mode,
-                      // ถ้าเปิดใช้ตารางเวลาไว้ โชว์ "ความตั้งใจ" ของผู้ใช้
-                      // (desiredAuto) แทนค่า Auto จริงที่อาจถูกตารางเวลา
-                      // บังคับปิดชั่วคราวอยู่ — ไม่งั้นสวิตช์จะดูเหมือน
-                      // ปิดเองโดยไม่มีเหตุผลตอนอยู่นอกช่วงเวลา
-                      value: (data['scheduleEnabled'] == true)
-                          ? (data['desiredAuto'] ?? data['Auto'] ?? false)
-                          : (data['Auto'] ?? false),
-                      onChanged: (val) async {
-                        final scheduleEnabled = data['scheduleEnabled'] == true;
-
-                        if (!scheduleEnabled) {
-                          // ของเดิม ไม่เปลี่ยนพฤติกรรมเลยถ้าไม่ได้เปิดใช้
-                          // ตารางเวลา
-                          await FirebaseFirestore.instance
-                              .collection('ESP32')
-                              .doc(nanoId)
-                              .update({
-                            'Auto': val,
-                            if (val == true) 'Valve': false,
-                          });
-                          return;
-                        }
-
-                        final scheduleStart = data['scheduleStart'] as String?;
-                        final scheduleEnd = data['scheduleEnd'] as String?;
-                        bool allowedNow = true;
-                        if (scheduleStart != null && scheduleEnd != null) {
-                          final withinWindow = isWithinScheduleWindow(
-                              scheduleStart, scheduleEnd);
-                          allowedNow = data['scheduleMode'] == 'block'
-                              ? !withinWindow
-                              : withinWindow;
-                        }
-                        final effective = val && allowedNow;
-
-                        await FirebaseFirestore.instance
-                            .collection('ESP32')
-                            .doc(nanoId)
-                            .update({
-                          'desiredAuto': val,
-                          'Auto': effective,
-                          if (effective) 'Valve': false,
-                        });
-                      },
-                    ),
+                const SizedBox(height: 12),
+                _MoistureSparkline(nanoId: nanoId),
+                const SizedBox(height: 12),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .surfaceContainerHighest
+                        .withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _ControlChip(
-                      label: "Valve",
-                      icon: Icons.water,
-                      value: data['Valve'] ?? false,
-                      onChanged: (val) async {
-                        await FirebaseFirestore.instance
-                            .collection('ESP32')
-                            .doc(nanoId)
-                            .update({
-                          'Valve': val,
-                          // เปิด Valve มือ = ปิด Auto กันชนกัน แต่ปิด Valve ไม่ควร
-                          // ไปเปิด Auto กลับให้เอง เพราะผู้ใช้อาจตั้งใจแค่จะหยุด
-                          // รดน้ำ ไม่ได้ต้องการให้ระบบตัดสินใจเปิดวาล์วเองอีก
-                          //
-                          // ต้องเคลียร์ desiredAuto ไปด้วย ไม่งั้นถ้าเปิดใช้
-                          // ตารางเวลาไว้ checkDevices.js รอบถัดไปจะเห็นว่า
-                          // desiredAuto ยังเป็น true แล้วเปิด Auto กลับมาเอง
-                          // ทับการเปิดวาล์วมือที่เพิ่งสั่งไป
-                          if (val == true) 'Auto': false,
-                          if (val == true) 'desiredAuto': false,
-                        });
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              // ถ้าเปิดตารางเวลาไว้ และผู้ใช้ตั้งใจเปิด Auto แต่ตอนนี้ไม่ใช่
-              // โชว์ตารางเวลาที่ตั้งไว้เสมอเมื่อเปิดใช้ (ไม่ใช่โชว์แค่ตอนถูก
-              // บังคับปิดอยู่) จะได้เห็นว่าตั้งไว้กี่โมงถึงกี่โมงโดยไม่ต้อง
-              // กดเข้าไปดู — ถ้าตอนนี้กำลังถูกตารางเวลาบังคับปิด Auto อยู่
-              // จะเปลี่ยนสีเป็นส้มเน้นให้เห็นชัดว่าทำไม Auto ไม่ทำงาน
-              if (data['scheduleEnabled'] == true &&
-                  data['scheduleStart'] != null &&
-                  data['scheduleEnd'] != null)
-                Builder(builder: (context) {
-                  final isSuppressed =
-                      (data['desiredAuto'] ?? data['Auto'] ?? false) == true &&
-                          data['Auto'] != true;
-                  final isBlockMode = data['scheduleMode'] == 'block';
-                  final label = isBlockMode
-                      ? "ห้ามรด ${data['scheduleStart']}-${data['scheduleEnd']}"
-                      : "รดได้ ${data['scheduleStart']}-${data['scheduleEnd']}";
-                  final color = isSuppressed
-                      ? Colors.orange
-                      : Theme.of(context).textTheme.bodySmall?.color;
-
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Row(
-                      children: [
-                        Icon(Icons.schedule, size: 14, color: color),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            isSuppressed
-                                ? "$label (Auto หยุดชั่วคราวตอนนี้)"
-                                : label,
-                            style: TextStyle(fontSize: 11, color: color),
-                          ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _MoistureGauge(
+                          moisture: data['Moisture'] as num?,
+                          target: currentTarget,
+                          isOffline: isOffline,
                         ),
-                      ],
-                    ),
-                  );
-                }),
-              const SizedBox(height: 14),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Theme.of(context).dividerColor,
+                      ),
+                      const _StatDivider(),
+                      Expanded(
+                        child: _StatTile(
+                          icon: Icons.flag,
+                          label: "Target",
+                          value: currentTarget.toString(),
+                        ),
+                      ),
+                      const _StatDivider(),
+                      Expanded(
+                        child: _StatTile(
+                          icon: Icons.schedule,
+                          label: "Time",
+                          value: "${data['Time'] ?? '-'}",
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                child: Row(
+                const SizedBox(height: 14),
+                Row(
                   children: [
-                    Icon(Icons.tune,
-                        size: 18,
-                        color: Theme.of(context).textTheme.bodySmall?.color),
-                    const SizedBox(width: 8),
-                    const Expanded(
-                      child: Text(
-                        "ตั้งค่าความชื้น",
-                        style: TextStyle(fontSize: 13),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 70,
-                      child: TextField(
-                        controller: _controller,
-                        focusNode: _focusNode,
-                        keyboardType: TextInputType.number,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 13),
-                        decoration: const InputDecoration(
-                          isDense: true,
-                          contentPadding: EdgeInsets.symmetric(vertical: 8),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    SizedBox(
-                      height: 36,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                        ),
-                        onPressed: () async {
-                          final newValue = double.tryParse(_controller.text);
+                    Expanded(
+                      child: _ControlChip(
+                        label: "Auto",
+                        icon: Icons.auto_mode,
+                        // ถ้าเปิดใช้ตารางเวลาไว้ โชว์ "ความตั้งใจ" ของผู้ใช้
+                        // (desiredAuto) แทนค่า Auto จริงที่อาจถูกตารางเวลา
+                        // บังคับปิดชั่วคราวอยู่ — ไม่งั้นสวิตช์จะดูเหมือน
+                        // ปิดเองโดยไม่มีเหตุผลตอนอยู่นอกช่วงเวลา
+                        value: (data['scheduleEnabled'] == true)
+                            ? (data['desiredAuto'] ?? data['Auto'] ?? false)
+                            : (data['Auto'] ?? false),
+                        onChanged: (val) async {
+                          final scheduleEnabled =
+                              data['scheduleEnabled'] == true;
 
-                          if (newValue != null) {
+                          if (!scheduleEnabled) {
+                            // ของเดิม ไม่เปลี่ยนพฤติกรรมเลยถ้าไม่ได้เปิดใช้
+                            // ตารางเวลา
                             await FirebaseFirestore.instance
                                 .collection('ESP32')
                                 .doc(nanoId)
                                 .update({
-                              'Automois': newValue,
+                              'Auto': val,
+                              if (val == true) 'Valve': false,
                             });
-
-                            if (!context.mounted) return;
-
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                behavior: SnackBarBehavior.floating,
-                                backgroundColor: const Color(0xFF2E7D32),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                margin: const EdgeInsets.all(16),
-                                content: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.check_circle,
-                                        color: Colors.white, size: 20),
-                                    SizedBox(width: 10),
-                                    Text(
-                                      "อัปเดตค่าความชื้นแล้ว",
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
+                            return;
                           }
+
+                          final scheduleStart =
+                              data['scheduleStart'] as String?;
+                          final scheduleEnd = data['scheduleEnd'] as String?;
+                          bool allowedNow = true;
+                          if (scheduleStart != null && scheduleEnd != null) {
+                            final withinWindow = isWithinScheduleWindow(
+                                scheduleStart, scheduleEnd);
+                            allowedNow = data['scheduleMode'] == 'block'
+                                ? !withinWindow
+                                : withinWindow;
+                          }
+                          final effective = val && allowedNow;
+
+                          await FirebaseFirestore.instance
+                              .collection('ESP32')
+                              .doc(nanoId)
+                              .update({
+                            'desiredAuto': val,
+                            'Auto': effective,
+                            if (effective) 'Valve': false,
+                          });
                         },
-                        child: const Text("บันทึก"),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _ControlChip(
+                        label: "Valve",
+                        icon: Icons.water,
+                        value: data['Valve'] ?? false,
+                        onChanged: (val) async {
+                          await FirebaseFirestore.instance
+                              .collection('ESP32')
+                              .doc(nanoId)
+                              .update({
+                            'Valve': val,
+                            // เปิด Valve มือ = ปิด Auto กันชนกัน แต่ปิด Valve ไม่ควร
+                            // ไปเปิด Auto กลับให้เอง เพราะผู้ใช้อาจตั้งใจแค่จะหยุด
+                            // รดน้ำ ไม่ได้ต้องการให้ระบบตัดสินใจเปิดวาล์วเองอีก
+                            //
+                            // ต้องเคลียร์ desiredAuto ไปด้วย ไม่งั้นถ้าเปิดใช้
+                            // ตารางเวลาไว้ checkDevices.js รอบถัดไปจะเห็นว่า
+                            // desiredAuto ยังเป็น true แล้วเปิด Auto กลับมาเอง
+                            // ทับการเปิดวาล์วมือที่เพิ่งสั่งไป
+                            if (val == true) 'Auto': false,
+                            if (val == true) 'desiredAuto': false,
+                          });
+                        },
                       ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 14),
-              const Divider(height: 1),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: _ActionButton(
-                      icon: Icons.calendar_month,
-                      label: "Calendar",
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => CalendarPage(nanoId: nanoId),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  Expanded(
-                    child: _ActionButton(
-                      icon: Icons.show_chart,
-                      label: "Graph",
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => GraphPage(nanoId: nanoId),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  Expanded(
-                    child: _ActionButton(
-                      icon: Icons.notifications_outlined,
-                      label: "History",
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => NotificationHistoryPage(
-                              nanoId: nanoId,
+                // ถ้าเปิดตารางเวลาไว้ และผู้ใช้ตั้งใจเปิด Auto แต่ตอนนี้ไม่ใช่
+                // โชว์ตารางเวลาที่ตั้งไว้เสมอเมื่อเปิดใช้ (ไม่ใช่โชว์แค่ตอนถูก
+                // บังคับปิดอยู่) จะได้เห็นว่าตั้งไว้กี่โมงถึงกี่โมงโดยไม่ต้อง
+                // กดเข้าไปดู — ถ้าตอนนี้กำลังถูกตารางเวลาบังคับปิด Auto อยู่
+                // จะเปลี่ยนสีเป็นส้มเน้นให้เห็นชัดว่าทำไม Auto ไม่ทำงาน
+                if (data['scheduleEnabled'] == true &&
+                    data['scheduleStart'] != null &&
+                    data['scheduleEnd'] != null)
+                  Builder(builder: (context) {
+                    final isSuppressed =
+                        (data['desiredAuto'] ?? data['Auto'] ?? false) ==
+                                true &&
+                            data['Auto'] != true;
+                    final isBlockMode = data['scheduleMode'] == 'block';
+                    final label = isBlockMode
+                        ? "ห้ามรด ${data['scheduleStart']}-${data['scheduleEnd']}"
+                        : "รดได้ ${data['scheduleStart']}-${data['scheduleEnd']}";
+                    final color = isSuppressed
+                        ? Colors.orange
+                        : Theme.of(context).textTheme.bodySmall?.color;
+
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Row(
+                        children: [
+                          Icon(Icons.schedule, size: 14, color: color),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              isSuppressed
+                                  ? "$label (Auto หยุดชั่วคราวตอนนี้)"
+                                  : label,
+                              style: TextStyle(fontSize: 11, color: color),
                             ),
                           ),
-                        );
-                      },
+                        ],
+                      ),
+                    );
+                  }),
+                const SizedBox(height: 14),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Theme.of(context).dividerColor,
                     ),
                   ),
-                  // เดิมซ่อนไว้หลังเมนู "⋮" ทำให้หาไม่เจอ + ดูไม่สมูธเพราะปุ่ม
-                  // เล็กแปลกๆ อยู่ปนกับปุ่มใหญ่ 3 ปุ่ม — ย้ายมาเป็นปุ่มแบบ
-                  // เดียวกันเลย ให้เห็นชัดว่ากดตั้งเวลาได้ พร้อมจุดเขียวบอกว่า
-                  // ตั้งไว้แล้วหรือยัง (อันนี้ยังอยู่ที่การ์ดเหมือนเดิม เพราะ
-                  // เป็นการตั้งค่าเฉพาะอุปกรณ์นี้ — ต่างจาก "ลบอุปกรณ์" ที่ย้าย
-                  // ไปรวมอยู่ในเมนูรวมของหน้าหลักแทนแล้ว)
-                  Expanded(
-                    child: _ActionButton(
-                      icon: Icons.schedule,
-                      label: "ตั้งเวลา",
-                      showBadge: data['scheduleEnabled'] == true,
-                      onTap: () => _openScheduleDialog(context, nanoId, data),
-                    ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.tune,
+                          size: 18,
+                          color: Theme.of(context).textTheme.bodySmall?.color),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          "ตั้งค่าความชื้น",
+                          style: TextStyle(fontSize: 13),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 70,
+                        child: TextField(
+                          controller: _controller,
+                          focusNode: _focusNode,
+                          keyboardType: TextInputType.number,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 13),
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(vertical: 8),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        height: 36,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                          ),
+                          onPressed: () async {
+                            final newValue = double.tryParse(_controller.text);
+
+                            if (newValue != null) {
+                              await FirebaseFirestore.instance
+                                  .collection('ESP32')
+                                  .doc(nanoId)
+                                  .update({
+                                'Automois': newValue,
+                              });
+
+                              if (!context.mounted) return;
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  behavior: SnackBarBehavior.floating,
+                                  backgroundColor: const Color(0xFF2E7D32),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  margin: const EdgeInsets.all(16),
+                                  content: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.check_circle,
+                                          color: Colors.white, size: 20),
+                                      SizedBox(width: 10),
+                                      Text(
+                                        "อัปเดตค่าความชื้นแล้ว",
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                          child: const Text("บันทึก"),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ],
+                ),
+                const SizedBox(height: 14),
+                const Divider(height: 1),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _ActionButton(
+                        icon: Icons.calendar_month,
+                        label: "Calendar",
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => CalendarPage(nanoId: nanoId),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    Expanded(
+                      child: _ActionButton(
+                        icon: Icons.show_chart,
+                        label: "Graph",
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => GraphPage(nanoId: nanoId),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    Expanded(
+                      child: _ActionButton(
+                        icon: Icons.notifications_outlined,
+                        label: "History",
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => NotificationHistoryPage(
+                                nanoId: nanoId,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    // เดิมซ่อนไว้หลังเมนู "⋮" ทำให้หาไม่เจอ + ดูไม่สมูธเพราะปุ่ม
+                    // เล็กแปลกๆ อยู่ปนกับปุ่มใหญ่ 3 ปุ่ม — ย้ายมาเป็นปุ่มแบบ
+                    // เดียวกันเลย ให้เห็นชัดว่ากดตั้งเวลาได้ พร้อมจุดเขียวบอกว่า
+                    // ตั้งไว้แล้วหรือยัง (อันนี้ยังอยู่ที่การ์ดเหมือนเดิม เพราะ
+                    // เป็นการตั้งค่าเฉพาะอุปกรณ์นี้ — ต่างจาก "ลบอุปกรณ์" ที่ย้าย
+                    // ไปรวมอยู่ในเมนูรวมของหน้าหลักแทนแล้ว)
+                    Expanded(
+                      child: _ActionButton(
+                        icon: Icons.schedule,
+                        label: "ตั้งเวลา",
+                        showBadge: data['scheduleEnabled'] == true,
+                        onTap: () => _openScheduleDialog(context, nanoId, data),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
