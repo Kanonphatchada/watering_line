@@ -713,6 +713,10 @@ class _DeviceCardState extends State<_DeviceCard>
     Map<String, dynamic> data,
   ) async {
     bool enabled = data['scheduleEnabled'] == true;
+    // "allow" = รดได้เฉพาะในช่วงนี้เท่านั้น, "block" = รดได้ตลอดยกเว้นในช่วง
+    // นี้ (เช่น เช้า-เย็น ยกเว้นเที่ยง แค่ตั้ง block 11:00-14:00 พอ ไม่ต้องมี
+    // หลายช่วงเวลาให้ยุ่งยาก)
+    String mode = data['scheduleMode'] == 'block' ? 'block' : 'allow';
     TimeOfDay start = _parseHHmm(data['scheduleStart'] as String?) ??
         const TimeOfDay(hour: 6, minute: 0);
     TimeOfDay end = _parseHHmm(data['scheduleEnd'] as String?) ??
@@ -727,12 +731,6 @@ class _DeviceCardState extends State<_DeviceCard>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                "อนุญาตให้โหมด Auto รดน้ำได้เฉพาะช่วงเวลาที่กำหนดเท่านั้น "
-                "นอกช่วงเวลานี้ระบบจะปิดโหมด Auto ให้ชั่วคราว",
-                style: TextStyle(fontSize: 13),
-              ),
-              const SizedBox(height: 12),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text("เปิดใช้ตารางเวลา"),
@@ -740,6 +738,32 @@ class _DeviceCardState extends State<_DeviceCard>
                 onChanged: (v) => setDialogState(() => enabled = v),
               ),
               if (enabled) ...[
+                const SizedBox(height: 4),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(
+                      value: 'allow',
+                      label: Text("รดได้เฉพาะช่วงนี้"),
+                    ),
+                    ButtonSegment(
+                      value: 'block',
+                      label: Text("ห้ามรดช่วงนี้"),
+                    ),
+                  ],
+                  selected: {mode},
+                  onSelectionChanged: (s) =>
+                      setDialogState(() => mode = s.first),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  mode == 'allow'
+                      ? "รดน้ำอัตโนมัติได้เฉพาะช่วงเวลานี้เท่านั้น "
+                          "นอกช่วงนี้ระบบจะปิดโหมด Auto ให้ชั่วคราว"
+                      : "รดน้ำอัตโนมัติได้ตามปกติ ยกเว้นช่วงเวลานี้ที่จะปิด "
+                          "โหมด Auto ให้ชั่วคราว",
+                  style: const TextStyle(fontSize: 12),
+                ),
+                const SizedBox(height: 8),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.wb_sunny_outlined),
@@ -794,12 +818,18 @@ class _DeviceCardState extends State<_DeviceCard>
     // desiredAuto: ถ้ายังไม่เคยมีมาก่อน ให้เริ่มจากค่า Auto ปัจจุบัน กัน
     // ไม่ให้ผู้ใช้เปิดตารางเวลาแล้ว Auto ที่เปิดอยู่ก่อนหน้าหายไปเฉยๆ
     final desiredAuto = data['desiredAuto'] ?? data['Auto'] ?? false;
-    final effective = enabled
-        ? (desiredAuto == true && isWithinScheduleWindow(startHHmm, endHHmm))
-        : (desiredAuto == true);
+    bool effective;
+    if (!enabled) {
+      effective = desiredAuto == true;
+    } else {
+      final withinWindow = isWithinScheduleWindow(startHHmm, endHHmm);
+      final allowedNow = mode == 'block' ? !withinWindow : withinWindow;
+      effective = desiredAuto == true && allowedNow;
+    }
 
     await FirebaseFirestore.instance.collection('ESP32').doc(nanoId).update({
       'scheduleEnabled': enabled,
+      'scheduleMode': mode,
       'scheduleStart': startHHmm,
       'scheduleEnd': endHHmm,
       'desiredAuto': desiredAuto,
@@ -986,11 +1016,15 @@ class _DeviceCardState extends State<_DeviceCard>
 
                         final scheduleStart = data['scheduleStart'] as String?;
                         final scheduleEnd = data['scheduleEnd'] as String?;
-                        final effective = val &&
-                            (scheduleStart == null ||
-                                scheduleEnd == null ||
-                                isWithinScheduleWindow(
-                                    scheduleStart, scheduleEnd));
+                        bool allowedNow = true;
+                        if (scheduleStart != null && scheduleEnd != null) {
+                          final withinWindow = isWithinScheduleWindow(
+                              scheduleStart, scheduleEnd);
+                          allowedNow = data['scheduleMode'] == 'block'
+                              ? !withinWindow
+                              : withinWindow;
+                        }
+                        final effective = val && allowedNow;
 
                         await FirebaseFirestore.instance
                             .collection('ESP32')
@@ -1032,32 +1066,43 @@ class _DeviceCardState extends State<_DeviceCard>
                 ],
               ),
               // ถ้าเปิดตารางเวลาไว้ และผู้ใช้ตั้งใจเปิด Auto แต่ตอนนี้ไม่ใช่
-              // ช่วงเวลาที่อนุญาต — บอกให้ชัดว่าทำไม Auto ถึงไม่ทำงานตอนนี้
-              // กันสับสนว่าสวิตช์เสียหรือระบบพัง
+              // โชว์ตารางเวลาที่ตั้งไว้เสมอเมื่อเปิดใช้ (ไม่ใช่โชว์แค่ตอนถูก
+              // บังคับปิดอยู่) จะได้เห็นว่าตั้งไว้กี่โมงถึงกี่โมงโดยไม่ต้อง
+              // กดเข้าไปดู — ถ้าตอนนี้กำลังถูกตารางเวลาบังคับปิด Auto อยู่
+              // จะเปลี่ยนสีเป็นส้มเน้นให้เห็นชัดว่าทำไม Auto ไม่ทำงาน
               if (data['scheduleEnabled'] == true &&
-                  (data['desiredAuto'] ?? data['Auto'] ?? false) == true &&
-                  data['Auto'] != true)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Row(
-                    children: [
-                      Icon(Icons.schedule,
-                          size: 14,
-                          color: Theme.of(context).textTheme.bodySmall?.color),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          "Auto หยุดชั่วคราวตามตารางเวลา "
-                          "(${data['scheduleStart']} - ${data['scheduleEnd']})",
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Theme.of(context).textTheme.bodySmall?.color,
+                  data['scheduleStart'] != null &&
+                  data['scheduleEnd'] != null)
+                Builder(builder: (context) {
+                  final isSuppressed =
+                      (data['desiredAuto'] ?? data['Auto'] ?? false) == true &&
+                          data['Auto'] != true;
+                  final isBlockMode = data['scheduleMode'] == 'block';
+                  final label = isBlockMode
+                      ? "ห้ามรด ${data['scheduleStart']}-${data['scheduleEnd']}"
+                      : "รดได้ ${data['scheduleStart']}-${data['scheduleEnd']}";
+                  final color = isSuppressed
+                      ? Colors.orange
+                      : Theme.of(context).textTheme.bodySmall?.color;
+
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Row(
+                      children: [
+                        Icon(Icons.schedule, size: 14, color: color),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            isSuppressed
+                                ? "$label (Auto หยุดชั่วคราวตอนนี้)"
+                                : label,
+                            style: TextStyle(fontSize: 11, color: color),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
+                      ],
+                    ),
+                  );
+                }),
               const SizedBox(height: 14),
               Container(
                 padding:
