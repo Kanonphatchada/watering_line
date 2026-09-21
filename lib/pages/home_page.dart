@@ -16,6 +16,28 @@ import '../widgets/avatar.dart';
 import 'login_page.dart';
 import '../main.dart';
 
+// ตรงกับ isWithinScheduleWindow ใน functions/checkDevices.js เป๊ะๆ — ใช้ฝั่ง
+// แอปเพื่อให้สวิตช์ Auto ตอบสนองทันทีตอนกด ไม่ต้องรอ backend รอบถัดไป (ทุก
+// 15 นาที) backend จะคอยเช็คซ้ำเผื่อข้ามช่วงเวลาไปเองโดยไม่มีใครแตะสวิตช์
+bool isWithinScheduleWindow(String startHHmm, String endHHmm) {
+  int toMinutes(String hhmm) {
+    final parts = hhmm.split(':');
+    return int.parse(parts[0]) * 60 + int.parse(parts[1]);
+  }
+
+  final nowBangkok = DateTime.now().toUtc().add(const Duration(hours: 7));
+  final nowMinutes = nowBangkok.hour * 60 + nowBangkok.minute;
+
+  final startMinutes = toMinutes(startHHmm);
+  final endMinutes = toMinutes(endHHmm);
+
+  if (startMinutes == endMinutes) return true;
+  if (startMinutes < endMinutes) {
+    return nowMinutes >= startMinutes && nowMinutes < endMinutes;
+  }
+  return nowMinutes >= startMinutes || nowMinutes < endMinutes;
+}
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -682,6 +704,126 @@ class _DeviceCardState extends State<_DeviceCard>
     }
   }
 
+  // ตั้งค่าตารางเวลารดน้ำอัตโนมัติ — ปิดอยู่โดย default ต่ออุปกรณ์ ไม่กระทบ
+  // อุปกรณ์ที่ไม่ได้เปิดใช้เลย พอกด "บันทึก" จะคำนวณ Auto ที่แท้จริงใหม่
+  // ทันที (ไม่ต้องรอ backend รอบถัดไป) ให้เห็นผลตรงกับที่ตั้งค่าไว้เลย
+  Future<void> _openScheduleDialog(
+    BuildContext context,
+    String nanoId,
+    Map<String, dynamic> data,
+  ) async {
+    bool enabled = data['scheduleEnabled'] == true;
+    TimeOfDay start = _parseHHmm(data['scheduleStart'] as String?) ??
+        const TimeOfDay(hour: 6, minute: 0);
+    TimeOfDay end = _parseHHmm(data['scheduleEnd'] as String?) ??
+        const TimeOfDay(hour: 18, minute: 0);
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text("ตั้งเวลารดน้ำ"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "อนุญาตให้โหมด Auto รดน้ำได้เฉพาะช่วงเวลาที่กำหนดเท่านั้น "
+                "นอกช่วงเวลานี้ระบบจะปิดโหมด Auto ให้ชั่วคราว",
+                style: TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text("เปิดใช้ตารางเวลา"),
+                value: enabled,
+                onChanged: (v) => setDialogState(() => enabled = v),
+              ),
+              if (enabled) ...[
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.wb_sunny_outlined),
+                  title: const Text("เริ่ม"),
+                  trailing: Text(start.format(context)),
+                  onTap: () async {
+                    final picked = await showTimePicker(
+                      context: context,
+                      initialTime: start,
+                    );
+                    if (picked != null) {
+                      setDialogState(() => start = picked);
+                    }
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.nights_stay_outlined),
+                  title: const Text("สิ้นสุด"),
+                  trailing: Text(end.format(context)),
+                  onTap: () async {
+                    final picked = await showTimePicker(
+                      context: context,
+                      initialTime: end,
+                    );
+                    if (picked != null) {
+                      setDialogState(() => end = picked);
+                    }
+                  },
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text("ยกเลิก"),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text("บันทึก"),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (saved != true) return;
+
+    final startHHmm = _formatHHmm(start);
+    final endHHmm = _formatHHmm(end);
+    // desiredAuto: ถ้ายังไม่เคยมีมาก่อน ให้เริ่มจากค่า Auto ปัจจุบัน กัน
+    // ไม่ให้ผู้ใช้เปิดตารางเวลาแล้ว Auto ที่เปิดอยู่ก่อนหน้าหายไปเฉยๆ
+    final desiredAuto = data['desiredAuto'] ?? data['Auto'] ?? false;
+    final effective = enabled
+        ? (desiredAuto == true && isWithinScheduleWindow(startHHmm, endHHmm))
+        : (desiredAuto == true);
+
+    await FirebaseFirestore.instance.collection('ESP32').doc(nanoId).update({
+      'scheduleEnabled': enabled,
+      'scheduleStart': startHHmm,
+      'scheduleEnd': endHHmm,
+      'desiredAuto': desiredAuto,
+      'Auto': effective,
+      if (effective) 'Valve': false,
+    });
+  }
+
+  TimeOfDay? _parseHHmm(String? hhmm) {
+    if (hhmm == null) return null;
+    final parts = hhmm.split(':');
+    if (parts.length != 2) return null;
+    final h = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    if (h == null || m == null) return null;
+    return TimeOfDay(hour: h, minute: m);
+  }
+
+  String _formatHHmm(TimeOfDay time) {
+    final h = time.hour.toString().padLeft(2, '0');
+    final m = time.minute.toString().padLeft(2, '0');
+    return '$h:$m';
+  }
+
   @override
   Widget build(BuildContext context) {
     final nanoId = widget.nanoId;
@@ -819,14 +961,44 @@ class _DeviceCardState extends State<_DeviceCard>
                     child: _ControlChip(
                       label: "Auto",
                       icon: Icons.auto_mode,
-                      value: data['Auto'] ?? false,
+                      // ถ้าเปิดใช้ตารางเวลาไว้ โชว์ "ความตั้งใจ" ของผู้ใช้
+                      // (desiredAuto) แทนค่า Auto จริงที่อาจถูกตารางเวลา
+                      // บังคับปิดชั่วคราวอยู่ — ไม่งั้นสวิตช์จะดูเหมือน
+                      // ปิดเองโดยไม่มีเหตุผลตอนอยู่นอกช่วงเวลา
+                      value: (data['scheduleEnabled'] == true)
+                          ? (data['desiredAuto'] ?? data['Auto'] ?? false)
+                          : (data['Auto'] ?? false),
                       onChanged: (val) async {
+                        final scheduleEnabled = data['scheduleEnabled'] == true;
+
+                        if (!scheduleEnabled) {
+                          // ของเดิม ไม่เปลี่ยนพฤติกรรมเลยถ้าไม่ได้เปิดใช้
+                          // ตารางเวลา
+                          await FirebaseFirestore.instance
+                              .collection('ESP32')
+                              .doc(nanoId)
+                              .update({
+                            'Auto': val,
+                            if (val == true) 'Valve': false,
+                          });
+                          return;
+                        }
+
+                        final scheduleStart = data['scheduleStart'] as String?;
+                        final scheduleEnd = data['scheduleEnd'] as String?;
+                        final effective = val &&
+                            (scheduleStart == null ||
+                                scheduleEnd == null ||
+                                isWithinScheduleWindow(
+                                    scheduleStart, scheduleEnd));
+
                         await FirebaseFirestore.instance
                             .collection('ESP32')
                             .doc(nanoId)
                             .update({
-                          'Auto': val,
-                          if (val == true) 'Valve': false,
+                          'desiredAuto': val,
+                          'Auto': effective,
+                          if (effective) 'Valve': false,
                         });
                       },
                     ),
@@ -846,13 +1018,46 @@ class _DeviceCardState extends State<_DeviceCard>
                           // เปิด Valve มือ = ปิด Auto กันชนกัน แต่ปิด Valve ไม่ควร
                           // ไปเปิด Auto กลับให้เอง เพราะผู้ใช้อาจตั้งใจแค่จะหยุด
                           // รดน้ำ ไม่ได้ต้องการให้ระบบตัดสินใจเปิดวาล์วเองอีก
+                          //
+                          // ต้องเคลียร์ desiredAuto ไปด้วย ไม่งั้นถ้าเปิดใช้
+                          // ตารางเวลาไว้ checkDevices.js รอบถัดไปจะเห็นว่า
+                          // desiredAuto ยังเป็น true แล้วเปิด Auto กลับมาเอง
+                          // ทับการเปิดวาล์วมือที่เพิ่งสั่งไป
                           if (val == true) 'Auto': false,
+                          if (val == true) 'desiredAuto': false,
                         });
                       },
                     ),
                   ),
                 ],
               ),
+              // ถ้าเปิดตารางเวลาไว้ และผู้ใช้ตั้งใจเปิด Auto แต่ตอนนี้ไม่ใช่
+              // ช่วงเวลาที่อนุญาต — บอกให้ชัดว่าทำไม Auto ถึงไม่ทำงานตอนนี้
+              // กันสับสนว่าสวิตช์เสียหรือระบบพัง
+              if (data['scheduleEnabled'] == true &&
+                  (data['desiredAuto'] ?? data['Auto'] ?? false) == true &&
+                  data['Auto'] != true)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.schedule,
+                          size: 14,
+                          color: Theme.of(context).textTheme.bodySmall?.color),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          "Auto หยุดชั่วคราวตามตารางเวลา "
+                          "(${data['scheduleStart']} - ${data['scheduleEnd']})",
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Theme.of(context).textTheme.bodySmall?.color,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               const SizedBox(height: 14),
               Container(
                 padding:
@@ -1000,9 +1205,21 @@ class _DeviceCardState extends State<_DeviceCard>
                     onSelected: (value) {
                       if (value == 'remove') {
                         _confirmAndRemoveDevice(context);
+                      } else if (value == 'schedule') {
+                        _openScheduleDialog(context, nanoId, data);
                       }
                     },
                     itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'schedule',
+                        child: Row(
+                          children: [
+                            Icon(Icons.schedule),
+                            SizedBox(width: 8),
+                            Text("ตั้งเวลารดน้ำ"),
+                          ],
+                        ),
+                      ),
                       const PopupMenuItem(
                         value: 'remove',
                         child: Row(
