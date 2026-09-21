@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
 import 'package:shimmer/shimmer.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'calendar_page.dart';
@@ -41,6 +43,19 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
         actions: [
+          // ปุ่มเพิ่มอุปกรณ์ถาวรใน AppBar — เมื่อก่อนมีทางเข้าหน้า
+          // AddDevicePage แค่ตอนยังไม่มีอุปกรณ์เลยสักตัว (empty state) พอมี
+          // อุปกรณ์แรกแล้วหาทางเพิ่มเครื่องที่ 2 ไม่เจอเลย
+          IconButton(
+            tooltip: "เพิ่มอุปกรณ์",
+            icon: const Icon(Icons.add_circle_outline_rounded),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AddDevicePage()),
+              );
+            },
+          ),
           ValueListenableBuilder<ThemeMode>(
             valueListenable: themeModeNotifier,
             builder: (context, mode, _) {
@@ -568,6 +583,105 @@ class _DeviceCardState extends State<_DeviceCard>
     super.dispose();
   }
 
+  // ยกเลิกการผูกอุปกรณ์ (ลบออกจากบัญชีตัวเอง ไม่ได้ลบ document ทิ้ง) — ยิงผ่าน
+  // backend route /unclaim-device ด้วย Firebase ID token แทนที่จะเขียน
+  // Firestore ตรงๆ จาก client เพื่อไม่ต้องเปิด rule เพิ่มให้ client เคลียร์
+  // uid/ownerUid เอง (ดูเหตุผลเต็มๆ ที่ index.js)
+  Future<void> _confirmAndRemoveDevice(BuildContext context) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.red.withValues(alpha: 0.1),
+          ),
+          child: const Icon(
+            Icons.warning_amber_rounded,
+            color: Colors.red,
+            size: 30,
+          ),
+        ),
+        title: const Text(
+          "ลบอุปกรณ์นี้?",
+          textAlign: TextAlign.center,
+        ),
+        content: Text(
+          "จะยกเลิกการผูก \"${widget.nanoId}\" กับบัญชีนี้ "
+          "ต้องเชื่อมต่อใหม่ด้วย Device ID/Password ถึงจะใช้งานได้อีกครั้ง",
+          textAlign: TextAlign.center,
+        ),
+        actionsAlignment: MainAxisAlignment.spaceBetween,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("ยกเลิก"),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("ลบอุปกรณ์"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+    if (!context.mounted) return;
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      final idToken = await user.getIdToken();
+      final res = await http.post(
+        Uri.parse("https://line-auth-server.onrender.com/unclaim-device"),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $idToken",
+        },
+        body: jsonEncode({"nanoId": widget.nanoId}),
+      );
+
+      if (!context.mounted) return;
+
+      if (res.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: const Color(0xFF2E7D32),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+            content: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.check_circle, color: Colors.white, size: 20),
+                SizedBox(width: 10),
+                Text(
+                  "ลบอุปกรณ์แล้ว",
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("ลบอุปกรณ์ไม่สำเร็จ ลองใหม่อีกครั้ง")),
+        );
+      }
+    } catch (err) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("ลบอุปกรณ์ไม่สำเร็จ ลองใหม่อีกครั้ง")),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final nanoId = widget.nanoId;
@@ -876,6 +990,33 @@ class _DeviceCardState extends State<_DeviceCard>
                         );
                       },
                     ),
+                  ),
+                  // ซ่อนตัวเลือกลบไว้หลังเมนู ไม่ใช่ปุ่มถังขยะสีแดงลอยเด่น
+                  // เพราะกลัวกดโดนโดยไม่ตั้งใจ — ต้องกดเปิดเมนูก่อน แล้วค่อย
+                  // เลือก "ลบอุปกรณ์" แล้วค่อยกดยืนยันอีกที รวม 3 ขั้นตอน
+                  PopupMenuButton<String>(
+                    tooltip: "ตัวเลือกเพิ่มเติม",
+                    icon: const Icon(Icons.more_vert),
+                    onSelected: (value) {
+                      if (value == 'remove') {
+                        _confirmAndRemoveDevice(context);
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'remove',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete_outline, color: Colors.red),
+                            SizedBox(width: 8),
+                            Text(
+                              "ลบอุปกรณ์",
+                              style: TextStyle(color: Colors.red),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
