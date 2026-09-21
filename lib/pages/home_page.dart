@@ -502,82 +502,6 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
         actions: [
-          // เมนูรวม — เดิมมี "เพิ่มอุปกรณ์" เป็นปุ่มแยก + "ตั้งเวลาทั้งฟาร์ม"
-          // กับช่องค้นหาอยู่อีกแถวใต้แถบสรุป รวมเข้าเมนูเดียวให้ดูเป็น
-          // ระเบียบขึ้น ต้องครอบด้วย StreamBuilder ของตัวเองเพราะ AppBar
-          // สร้างก่อน StreamBuilder หลักของหน้า (ที่มี docs) จะยังไม่มีข้อมูล
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('ESP32')
-                .where('uid', isEqualTo: uid)
-                .snapshots(),
-            builder: (context, menuSnapshot) {
-              final menuDocs = menuSnapshot.data?.docs ?? [];
-              return PopupMenuButton<String>(
-                tooltip: "เมนู",
-                icon: const Icon(Icons.menu),
-                onSelected: (value) {
-                  switch (value) {
-                    case 'add':
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const AddDevicePage(),
-                        ),
-                      );
-                    case 'schedule':
-                      _openFarmScheduleDialog(context, menuDocs);
-                    case 'search':
-                      setState(() => _searchBarVisible = !_searchBarVisible);
-                    case 'remove':
-                      _openRemoveDevicePicker(context, menuDocs);
-                  }
-                },
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'add',
-                    child: Row(
-                      children: [
-                        Icon(Icons.add_circle_outline_rounded),
-                        SizedBox(width: 8),
-                        Text("เพิ่มอุปกรณ์"),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'schedule',
-                    child: Row(
-                      children: [
-                        Icon(Icons.schedule),
-                        SizedBox(width: 8),
-                        Text("ตั้งเวลาทั้งฟาร์ม"),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'search',
-                    child: Row(
-                      children: [
-                        Icon(Icons.search),
-                        SizedBox(width: 8),
-                        Text("ค้นหาอุปกรณ์"),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'remove',
-                    child: Row(
-                      children: [
-                        Icon(Icons.delete_outline, color: Colors.red),
-                        SizedBox(width: 8),
-                        Text("ลบอุปกรณ์", style: TextStyle(color: Colors.red)),
-                      ],
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
           IconButton(
             icon: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -795,6 +719,83 @@ class _HomePageState extends State<HomePage> {
                     // (ProfilePage มีอยู่แล้ว) ไม่ต้องมีซ้ำ 2 ที่
                   ],
                 ),
+              );
+            },
+          ),
+          // เมนูรวม — เดิมมี "เพิ่มอุปกรณ์" เป็นปุ่มแยก + "ตั้งเวลาทั้งฟาร์ม"
+          // กับช่องค้นหาอยู่อีกแถวใต้แถบสรุป รวมเข้าเมนูเดียวให้ดูเป็น
+          // ระเบียบขึ้น ต้องครอบด้วย StreamBuilder ของตัวเองเพราะ AppBar
+          // สร้างก่อน StreamBuilder หลักของหน้า (ที่มี docs) จะยังไม่มีข้อมูล
+          // — ย้ายมาไว้ขวาสุดของแถบ (หลังไอคอนโปรไฟล์) ตามที่ขอ
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('ESP32')
+                .where('uid', isEqualTo: uid)
+                .snapshots(),
+            builder: (context, menuSnapshot) {
+              final menuDocs = menuSnapshot.data?.docs ?? [];
+              return PopupMenuButton<String>(
+                tooltip: "เมนู",
+                icon: const Icon(Icons.menu),
+                onSelected: (value) {
+                  switch (value) {
+                    case 'add':
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AddDevicePage(),
+                        ),
+                      );
+                    case 'schedule':
+                      _openFarmScheduleDialog(context, menuDocs);
+                    case 'search':
+                      setState(() => _searchBarVisible = !_searchBarVisible);
+                    case 'remove':
+                      _openRemoveDevicePicker(context, menuDocs);
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'add',
+                    child: Row(
+                      children: [
+                        Icon(Icons.add_circle_outline_rounded),
+                        SizedBox(width: 8),
+                        Text("เพิ่มอุปกรณ์"),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'schedule',
+                    child: Row(
+                      children: [
+                        Icon(Icons.schedule),
+                        SizedBox(width: 8),
+                        Text("ตั้งเวลาทั้งฟาร์ม"),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'search',
+                    child: Row(
+                      children: [
+                        Icon(Icons.search),
+                        SizedBox(width: 8),
+                        Text("ค้นหาอุปกรณ์"),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'remove',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete_outline, color: Colors.red),
+                        SizedBox(width: 8),
+                        Text("ลบอุปกรณ์", style: TextStyle(color: Colors.red)),
+                      ],
+                    ),
+                  ),
+                ],
               );
             },
           ),
