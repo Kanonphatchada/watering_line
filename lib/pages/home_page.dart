@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -47,6 +48,28 @@ String formatHHmm(TimeOfDay time) {
   final h = time.hour.toString().padLeft(2, '0');
   final m = time.minute.toString().padLeft(2, '0');
   return '$h:$m';
+}
+
+// รองรับช่วง "ห้ามรดพิเศษ" ซ้อนอยู่ในช่วงเวลาหลักได้ เช่น รดได้เฉพาะ
+// 08:00-18:00 แต่ห้ามรดตอน 12:00-14:00 — ช่วงพิเศษนี้บังคับห้ามเสมอไม่ว่า
+// โหมดหลักจะเป็น allow หรือ block ก็ตาม ต้องตรงกับ resolveScheduleAllowed
+// ใน functions/checkDevices.js เป๊ะๆ เหมือน isWithinScheduleWindow
+bool resolveScheduleAllowed({
+  required String mode,
+  required String startHHmm,
+  required String endHHmm,
+  bool exceptEnabled = false,
+  String? exceptStartHHmm,
+  String? exceptEndHHmm,
+}) {
+  final withinMain = isWithinScheduleWindow(startHHmm, endHHmm);
+  var allowed = mode == 'block' ? !withinMain : withinMain;
+  if (exceptEnabled && exceptStartHHmm != null && exceptEndHHmm != null) {
+    if (isWithinScheduleWindow(exceptStartHHmm, exceptEndHHmm)) {
+      allowed = false;
+    }
+  }
+  return allowed;
 }
 
 // ยกเลิกการผูกอุปกรณ์ (ลบออกจากบัญชีตัวเอง ไม่ได้ลบ document ทิ้ง) — ยิงผ่าน
@@ -101,18 +124,45 @@ Future<void> confirmAndRemoveDevice(BuildContext context, String nanoId) async {
   final user = FirebaseAuth.instance.currentUser;
   if (user == null) return;
 
+  // backend เป็น Render free tier — ถ้าไม่มีใครเรียกนานๆ จะ sleep เอง ตื่น
+  // ครั้งแรก (cold start) ใช้เวลาได้ถึง 30-60 วิ ถ้าไม่โชว์ loading ไว้ก่อน
+  // ผู้ใช้จะคิดว่ากดแล้วไม่มีอะไรเกิดขึ้นเลย (เจอเคสนี้จริงมาแล้ว)
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      duration: Duration(seconds: 60),
+      content: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          SizedBox(width: 12),
+          Expanded(
+            child:
+                Text("กำลังลบอุปกรณ์... อาจใช้เวลาสักครู่ถ้า server เพิ่งตื่น"),
+          ),
+        ],
+      ),
+    ),
+  );
+
   try {
     final idToken = await user.getIdToken();
-    final res = await http.post(
-      Uri.parse("https://line-auth-server.onrender.com/unclaim-device"),
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer $idToken",
-      },
-      body: jsonEncode({"nanoId": nanoId}),
-    );
+    final res = await http
+        .post(
+          Uri.parse("https://line-auth-server.onrender.com/unclaim-device"),
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer $idToken",
+          },
+          body: jsonEncode({"nanoId": nanoId}),
+        )
+        .timeout(const Duration(seconds: 60));
 
     if (!context.mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
     if (res.statusCode == 200) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -143,9 +193,12 @@ Future<void> confirmAndRemoveDevice(BuildContext context, String nanoId) async {
     }
   } catch (err) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("ลบอุปกรณ์ไม่สำเร็จ ลองใหม่อีกครั้ง")),
-    );
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    final message = err is TimeoutException
+        ? "เชื่อมต่อ server ไม่ได้ (server อาจกำลัง sleep) ลองใหม่อีกครั้ง"
+        : "ลบอุปกรณ์ไม่สำเร็จ ลองใหม่อีกครั้ง";
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
@@ -255,7 +308,16 @@ class _HomePageState extends State<HomePage> {
       ),
     );
 
-    pickerQueryController.dispose();
+    // ห้าม dispose ทันทีตรงนี้ — Future ของ showDialog จะ resolve ทันทีที่
+    // Navigator.pop() เรียก แต่ dialog ยังเล่น animation ปิดอยู่บนจอ (TextField
+    // ที่ผูกกับ controller นี้ยังอยู่ใน tree ระหว่าง transition) การ dispose
+    // ตอนนั้นเลยไปโดน TextField ที่ยังไม่ถูกถอดออกจาก tree จริงๆ ทำให้ Flutter
+    // แจ้ง assertion "_dependents.isEmpty is not true" แครชขึ้นจอแดง — เลื่อน
+    // ไปทำหลัง frame ปัจจุบันจบก่อน ให้ transition มีเวลาเคลียร์ตัวเองก่อน
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      pickerQueryController.dispose();
+    });
+
     if (nanoId == null) return;
     if (!context.mounted) return;
 
@@ -325,6 +387,13 @@ class _HomePageState extends State<HomePage> {
         const TimeOfDay(hour: 6, minute: 0);
     TimeOfDay end = parseHHmm(registryData['scheduleEnd'] as String?) ??
         const TimeOfDay(hour: 18, minute: 0);
+    bool exceptEnabled = registryData['scheduleExceptEnabled'] == true;
+    TimeOfDay exceptStart =
+        parseHHmm(registryData['scheduleExceptStart'] as String?) ??
+            const TimeOfDay(hour: 12, minute: 0);
+    TimeOfDay exceptEnd =
+        parseHHmm(registryData['scheduleExceptEnd'] as String?) ??
+            const TimeOfDay(hour: 14, minute: 0);
 
     final deviceCount = docs
         .where((d) => (d.data() as Map<String, dynamic>)['groupId'] == groupId)
@@ -337,71 +406,120 @@ class _HomePageState extends State<HomePage> {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: const Text("ตั้งเวลารดน้ำทั้งฟาร์ม"),
-          // ล็อกความกว้างไว้คงที่ เหมือนกับ dialog ตั้งเวลารายอุปกรณ์
+          // ล็อกความกว้างไว้คงที่ เหมือนกับ dialog ตั้งเวลารายอุปกรณ์ — ห่อ
+          // ด้วย SingleChildScrollView ด้วย เพราะเนื้อหายาวขึ้นมากหลังเพิ่ม
+          // ช่วงห้ามรดพิเศษ อาจเกินพื้นที่ dialog บนหน้าจอเล็กจนล้น (overflow)
           content: SizedBox(
             width: 320,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "ใช้กับอุปกรณ์ $deviceCount ตัวในกลุ่ม \"$groupId\" "
-                  "(อุปกรณ์ที่ตั้งเวลาเฉพาะตัวไว้แล้วจะไม่ถูกทับ)",
-                  style: const TextStyle(fontSize: 12),
-                ),
-                const SizedBox(height: 12),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text("เปิดใช้ตารางเวลา"),
-                  value: enabled,
-                  onChanged: (v) => setDialogState(() => enabled = v),
-                ),
-                if (enabled) ...[
-                  const SizedBox(height: 4),
-                  SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(
-                        value: 'allow',
-                        label: Text("รดได้เฉพาะช่วงนี้"),
-                      ),
-                      ButtonSegment(
-                        value: 'block',
-                        label: Text("ห้ามรดช่วงนี้"),
-                      ),
-                    ],
-                    selected: {mode},
-                    onSelectionChanged: (s) =>
-                        setDialogState(() => mode = s.first),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "ใช้กับอุปกรณ์ $deviceCount ตัวในกลุ่ม \"$groupId\" "
+                    "(อุปกรณ์ที่ตั้งเวลาเฉพาะตัวไว้แล้วจะไม่ถูกทับ)",
+                    style: const TextStyle(fontSize: 12),
                   ),
                   const SizedBox(height: 12),
-                  ListTile(
+                  SwitchListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.wb_sunny_outlined),
-                    title: const Text("เริ่ม"),
-                    trailing: Text(start.format(context)),
-                    onTap: () async {
-                      final picked = await showTimePicker(
-                        context: context,
-                        initialTime: start,
-                      );
-                      if (picked != null) setDialogState(() => start = picked);
-                    },
+                    title: const Text("เปิดใช้ตารางเวลา"),
+                    value: enabled,
+                    onChanged: (v) => setDialogState(() => enabled = v),
                   ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.nights_stay_outlined),
-                    title: const Text("สิ้นสุด"),
-                    trailing: Text(end.format(context)),
-                    onTap: () async {
-                      final picked = await showTimePicker(
-                        context: context,
-                        initialTime: end,
-                      );
-                      if (picked != null) setDialogState(() => end = picked);
-                    },
-                  ),
+                  if (enabled) ...[
+                    const SizedBox(height: 4),
+                    SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(
+                          value: 'allow',
+                          label: Text("รดได้เฉพาะช่วงนี้"),
+                        ),
+                        ButtonSegment(
+                          value: 'block',
+                          label: Text("ห้ามรดช่วงนี้"),
+                        ),
+                      ],
+                      selected: {mode},
+                      onSelectionChanged: (s) =>
+                          setDialogState(() => mode = s.first),
+                    ),
+                    const SizedBox(height: 12),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.wb_sunny_outlined),
+                      title: const Text("เริ่ม"),
+                      trailing: Text(start.format(context)),
+                      onTap: () async {
+                        final picked = await showTimePicker(
+                          context: context,
+                          initialTime: start,
+                        );
+                        if (picked != null) {
+                          setDialogState(() => start = picked);
+                        }
+                      },
+                    ),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.nights_stay_outlined),
+                      title: const Text("สิ้นสุด"),
+                      trailing: Text(end.format(context)),
+                      onTap: () async {
+                        final picked = await showTimePicker(
+                          context: context,
+                          initialTime: end,
+                        );
+                        if (picked != null) setDialogState(() => end = picked);
+                      },
+                    ),
+                    const Divider(height: 24),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text("เพิ่มช่วงห้ามรดพิเศษ"),
+                      subtitle: const Text(
+                        "ห้ามรดในช่วงนี้เสมอ ซ้อนอยู่ในช่วงเวลาข้างบน",
+                      ),
+                      value: exceptEnabled,
+                      onChanged: (v) => setDialogState(() => exceptEnabled = v),
+                    ),
+                    if (exceptEnabled) ...[
+                      const SizedBox(height: 4),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.wb_sunny_outlined),
+                        title: const Text("เริ่มห้ามรด"),
+                        trailing: Text(exceptStart.format(context)),
+                        onTap: () async {
+                          final picked = await showTimePicker(
+                            context: context,
+                            initialTime: exceptStart,
+                          );
+                          if (picked != null) {
+                            setDialogState(() => exceptStart = picked);
+                          }
+                        },
+                      ),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.nights_stay_outlined),
+                        title: const Text("สิ้นสุดห้ามรด"),
+                        trailing: Text(exceptEnd.format(context)),
+                        onTap: () async {
+                          final picked = await showTimePicker(
+                            context: context,
+                            initialTime: exceptEnd,
+                          );
+                          if (picked != null) {
+                            setDialogState(() => exceptEnd = picked);
+                          }
+                        },
+                      ),
+                    ],
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
           actions: [
@@ -422,6 +540,8 @@ class _HomePageState extends State<HomePage> {
 
     final startHHmm = formatHHmm(start);
     final endHHmm = formatHHmm(end);
+    final exceptStartHHmm = formatHHmm(exceptStart);
+    final exceptEndHHmm = formatHHmm(exceptEnd);
 
     try {
       await FirebaseFirestore.instance
@@ -432,12 +552,21 @@ class _HomePageState extends State<HomePage> {
         'scheduleMode': mode,
         'scheduleStart': startHHmm,
         'scheduleEnd': endHHmm,
+        'scheduleExceptEnabled': exceptEnabled,
+        'scheduleExceptStart': exceptStartHHmm,
+        'scheduleExceptEnd': exceptEndHHmm,
       });
 
       // อัปเดต Auto ทันทีให้ทุกอุปกรณ์ในกลุ่มที่ "ไม่ได้" override ไว้เอง —
       // ให้เห็นผลตรงกับที่ตั้งค่าไว้เลย ไม่ต้องรอ backend รอบถัดไป (15 นาที)
-      final withinWindow = isWithinScheduleWindow(startHHmm, endHHmm);
-      final allowedNow = mode == 'block' ? !withinWindow : withinWindow;
+      final allowedNow = resolveScheduleAllowed(
+        mode: mode,
+        startHHmm: startHHmm,
+        endHHmm: endHHmm,
+        exceptEnabled: exceptEnabled,
+        exceptStartHHmm: exceptStartHHmm,
+        exceptEndHHmm: exceptEndHHmm,
+      );
 
       final batch = FirebaseFirestore.instance.batch();
       for (final doc in docs) {
@@ -1126,13 +1255,19 @@ class _DeviceCardState extends State<_DeviceCard>
     bool useOverride = data['scheduleOverride'] == true;
     bool enabled = data['scheduleEnabled'] == true;
     // "allow" = รดได้เฉพาะในช่วงนี้เท่านั้น, "block" = รดได้ตลอดยกเว้นในช่วง
-    // นี้ (เช่น เช้า-เย็น ยกเว้นเที่ยง แค่ตั้ง block 11:00-14:00 พอ ไม่ต้องมี
-    // หลายช่วงเวลาให้ยุ่งยาก)
+    // นี้ (เช่น เช้า-เย็น ยกเว้นเที่ยง แค่ตั้ง block 11:00-14:00 พอ) ถ้าต้องการ
+    // รดได้เฉพาะช่วงหนึ่งแล้วยังห้ามรดซ้อนอีกช่วงย่อยข้างใน (เช่น รดได้
+    // 08:00-18:00 แต่ห้ามรดตอน 12:00-14:00) ใช้ "เพิ่มช่วงห้ามรดพิเศษ" ข้างล่าง
     String mode = data['scheduleMode'] == 'block' ? 'block' : 'allow';
     TimeOfDay start = parseHHmm(data['scheduleStart'] as String?) ??
         const TimeOfDay(hour: 6, minute: 0);
     TimeOfDay end = parseHHmm(data['scheduleEnd'] as String?) ??
         const TimeOfDay(hour: 18, minute: 0);
+    bool exceptEnabled = data['scheduleExceptEnabled'] == true;
+    TimeOfDay exceptStart = parseHHmm(data['scheduleExceptStart'] as String?) ??
+        const TimeOfDay(hour: 12, minute: 0);
+    TimeOfDay exceptEnd = parseHHmm(data['scheduleExceptEnd'] as String?) ??
+        const TimeOfDay(hour: 14, minute: 0);
 
     // อุปกรณ์ทุกตัวอยู่ในกลุ่ม/ฟาร์มเดียวกันได้ ตั้งเวลาไว้ที่กลุ่มแล้วอาจ
     // ครอบทุกอุปกรณ์อยู่แล้ว — ดึงมาโชว์เป็นข้อมูลตอนไม่ได้ override เอง
@@ -1155,108 +1290,156 @@ class _DeviceCardState extends State<_DeviceCard>
           title: const Text("ตั้งเวลารดน้ำ"),
           // ล็อกความกว้างไว้คงที่ ไม่งั้น AlertDialog จะห่อความกว้างตาม
           // เนื้อหาที่ยาวที่สุด ตอนสลับโหมด allow/block ข้อความอธิบายยาว
-          // ไม่เท่ากัน ทำให้กล่องขยับบีบ/ขยายไปมาเวลาสลับ
+          // ไม่เท่ากัน ทำให้กล่องขยับบีบ/ขยายไปมาเวลาสลับ — ห่อด้วย
+          // SingleChildScrollView ด้วย เพราะเนื้อหายาวขึ้นมากหลังเพิ่มช่วง
+          // ห้ามรดพิเศษ อาจเกินพื้นที่ dialog บนหน้าจอเล็กจนล้น (overflow)
           content: SizedBox(
             width: 320,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text("ตั้งเวลาเฉพาะอุปกรณ์นี้"),
-                  subtitle: const Text("ไม่ใช้ตารางเวลาของฟาร์ม"),
-                  value: useOverride,
-                  onChanged: (v) => setDialogState(() => useOverride = v),
-                ),
-                if (!useOverride) ...[
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      color:
-                          Theme.of(context).colorScheme.surfaceContainerHighest,
-                    ),
-                    child: Text(
-                      groupSchedule?['scheduleEnabled'] == true
-                          ? "ตอนนี้ใช้ตารางเวลาของฟาร์ม: "
-                              "${groupSchedule?['scheduleMode'] == 'block' ? 'ห้ามรด' : 'รดได้'} "
-                              "${groupSchedule?['scheduleStart']}-${groupSchedule?['scheduleEnd']}"
-                          : "ฟาร์มยังไม่ได้ตั้งตารางเวลาไว้ — อุปกรณ์นี้จะรดน้ำ "
-                              "ตามปกติไม่มีข้อจำกัดเรื่องเวลา",
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  ),
-                ],
-                if (useOverride) ...[
-                  const SizedBox(height: 4),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text("เปิดใช้ตารางเวลา"),
-                    value: enabled,
-                    onChanged: (v) => setDialogState(() => enabled = v),
+                    title: const Text("ตั้งเวลาเฉพาะอุปกรณ์นี้"),
+                    subtitle: const Text("ไม่ใช้ตารางเวลาของฟาร์ม"),
+                    value: useOverride,
+                    onChanged: (v) => setDialogState(() => useOverride = v),
                   ),
-                ],
-                if (useOverride && enabled) ...[
-                  const SizedBox(height: 4),
-                  SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(
-                        value: 'allow',
-                        label: Text("รดได้เฉพาะช่วงนี้"),
+                  if (!useOverride) ...[
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest,
                       ),
-                      ButtonSegment(
-                        value: 'block',
-                        label: Text("ห้ามรดช่วงนี้"),
+                      child: Text(
+                        groupSchedule?['scheduleEnabled'] == true
+                            ? "ตอนนี้ใช้ตารางเวลาของฟาร์ม: "
+                                "${groupSchedule?['scheduleMode'] == 'block' ? 'ห้ามรด' : 'รดได้'} "
+                                "${groupSchedule?['scheduleStart']}-${groupSchedule?['scheduleEnd']}"
+                            : "ฟาร์มยังไม่ได้ตั้งตารางเวลาไว้ — อุปกรณ์นี้จะรดน้ำ "
+                                "ตามปกติไม่มีข้อจำกัดเรื่องเวลา",
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                  if (useOverride) ...[
+                    const SizedBox(height: 4),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text("เปิดใช้ตารางเวลา"),
+                      value: enabled,
+                      onChanged: (v) => setDialogState(() => enabled = v),
+                    ),
+                  ],
+                  if (useOverride && enabled) ...[
+                    const SizedBox(height: 4),
+                    SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(
+                          value: 'allow',
+                          label: Text("รดได้เฉพาะช่วงนี้"),
+                        ),
+                        ButtonSegment(
+                          value: 'block',
+                          label: Text("ห้ามรดช่วงนี้"),
+                        ),
+                      ],
+                      selected: {mode},
+                      onSelectionChanged: (s) =>
+                          setDialogState(() => mode = s.first),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      mode == 'allow'
+                          ? "รดน้ำอัตโนมัติได้เฉพาะช่วงเวลานี้เท่านั้น "
+                              "นอกช่วงนี้ระบบจะปิดโหมด Auto ให้ชั่วคราว"
+                          : "รดน้ำอัตโนมัติได้ตามปกติ ยกเว้นช่วงเวลานี้ที่จะปิด "
+                              "โหมด Auto ให้ชั่วคราว",
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    const SizedBox(height: 8),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.wb_sunny_outlined),
+                      title: const Text("เริ่ม"),
+                      trailing: Text(start.format(context)),
+                      onTap: () async {
+                        final picked = await showTimePicker(
+                          context: context,
+                          initialTime: start,
+                        );
+                        if (picked != null) {
+                          setDialogState(() => start = picked);
+                        }
+                      },
+                    ),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.nights_stay_outlined),
+                      title: const Text("สิ้นสุด"),
+                      trailing: Text(end.format(context)),
+                      onTap: () async {
+                        final picked = await showTimePicker(
+                          context: context,
+                          initialTime: end,
+                        );
+                        if (picked != null) {
+                          setDialogState(() => end = picked);
+                        }
+                      },
+                    ),
+                    const Divider(height: 24),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text("เพิ่มช่วงห้ามรดพิเศษ"),
+                      subtitle: const Text(
+                        "ห้ามรดในช่วงนี้เสมอ ซ้อนอยู่ในช่วงเวลาข้างบน",
+                      ),
+                      value: exceptEnabled,
+                      onChanged: (v) => setDialogState(() => exceptEnabled = v),
+                    ),
+                    if (exceptEnabled) ...[
+                      const SizedBox(height: 4),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.wb_sunny_outlined),
+                        title: const Text("เริ่มห้ามรด"),
+                        trailing: Text(exceptStart.format(context)),
+                        onTap: () async {
+                          final picked = await showTimePicker(
+                            context: context,
+                            initialTime: exceptStart,
+                          );
+                          if (picked != null) {
+                            setDialogState(() => exceptStart = picked);
+                          }
+                        },
+                      ),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.nights_stay_outlined),
+                        title: const Text("สิ้นสุดห้ามรด"),
+                        trailing: Text(exceptEnd.format(context)),
+                        onTap: () async {
+                          final picked = await showTimePicker(
+                            context: context,
+                            initialTime: exceptEnd,
+                          );
+                          if (picked != null) {
+                            setDialogState(() => exceptEnd = picked);
+                          }
+                        },
                       ),
                     ],
-                    selected: {mode},
-                    onSelectionChanged: (s) =>
-                        setDialogState(() => mode = s.first),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    mode == 'allow'
-                        ? "รดน้ำอัตโนมัติได้เฉพาะช่วงเวลานี้เท่านั้น "
-                            "นอกช่วงนี้ระบบจะปิดโหมด Auto ให้ชั่วคราว"
-                        : "รดน้ำอัตโนมัติได้ตามปกติ ยกเว้นช่วงเวลานี้ที่จะปิด "
-                            "โหมด Auto ให้ชั่วคราว",
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                  const SizedBox(height: 8),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.wb_sunny_outlined),
-                    title: const Text("เริ่ม"),
-                    trailing: Text(start.format(context)),
-                    onTap: () async {
-                      final picked = await showTimePicker(
-                        context: context,
-                        initialTime: start,
-                      );
-                      if (picked != null) {
-                        setDialogState(() => start = picked);
-                      }
-                    },
-                  ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.nights_stay_outlined),
-                    title: const Text("สิ้นสุด"),
-                    trailing: Text(end.format(context)),
-                    onTap: () async {
-                      final picked = await showTimePicker(
-                        context: context,
-                        initialTime: end,
-                      );
-                      if (picked != null) {
-                        setDialogState(() => end = picked);
-                      }
-                    },
-                  ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
           actions: [
@@ -1288,16 +1471,27 @@ class _DeviceCardState extends State<_DeviceCard>
     if (useOverride) {
       final startHHmm = formatHHmm(start);
       final endHHmm = formatHHmm(end);
+      final exceptStartHHmm = formatHHmm(exceptStart);
+      final exceptEndHHmm = formatHHmm(exceptEnd);
       update['scheduleEnabled'] = enabled;
       update['scheduleMode'] = mode;
       update['scheduleStart'] = startHHmm;
       update['scheduleEnd'] = endHHmm;
+      update['scheduleExceptEnabled'] = exceptEnabled;
+      update['scheduleExceptStart'] = exceptStartHHmm;
+      update['scheduleExceptEnd'] = exceptEndHHmm;
 
       if (!enabled) {
         effective = desiredAuto == true;
       } else {
-        final withinWindow = isWithinScheduleWindow(startHHmm, endHHmm);
-        final allowedNow = mode == 'block' ? !withinWindow : withinWindow;
+        final allowedNow = resolveScheduleAllowed(
+          mode: mode,
+          startHHmm: startHHmm,
+          endHHmm: endHHmm,
+          exceptEnabled: exceptEnabled,
+          exceptStartHHmm: exceptStartHHmm,
+          exceptEndHHmm: exceptEndHHmm,
+        );
         effective = desiredAuto == true && allowedNow;
       }
     } else {
@@ -1306,10 +1500,14 @@ class _DeviceCardState extends State<_DeviceCard>
         final gStart = groupSchedule?['scheduleStart'] as String?;
         final gEnd = groupSchedule?['scheduleEnd'] as String?;
         if (gStart != null && gEnd != null) {
-          final withinWindow = isWithinScheduleWindow(gStart, gEnd);
-          final allowedNow = groupSchedule?['scheduleMode'] == 'block'
-              ? !withinWindow
-              : withinWindow;
+          final allowedNow = resolveScheduleAllowed(
+            mode: groupSchedule?['scheduleMode'] == 'block' ? 'block' : 'allow',
+            startHHmm: gStart,
+            endHHmm: gEnd,
+            exceptEnabled: groupSchedule?['scheduleExceptEnabled'] == true,
+            exceptStartHHmm: groupSchedule?['scheduleExceptStart'] as String?,
+            exceptEndHHmm: groupSchedule?['scheduleExceptEnd'] as String?,
+          );
           effective = desiredAuto == true && allowedNow;
         } else {
           effective = desiredAuto == true;
@@ -1533,11 +1731,19 @@ class _DeviceCardState extends State<_DeviceCard>
                           final scheduleEnd = data['scheduleEnd'] as String?;
                           bool allowedNow = true;
                           if (scheduleStart != null && scheduleEnd != null) {
-                            final withinWindow = isWithinScheduleWindow(
-                                scheduleStart, scheduleEnd);
-                            allowedNow = data['scheduleMode'] == 'block'
-                                ? !withinWindow
-                                : withinWindow;
+                            allowedNow = resolveScheduleAllowed(
+                              mode: data['scheduleMode'] == 'block'
+                                  ? 'block'
+                                  : 'allow',
+                              startHHmm: scheduleStart,
+                              endHHmm: scheduleEnd,
+                              exceptEnabled:
+                                  data['scheduleExceptEnabled'] == true,
+                              exceptStartHHmm:
+                                  data['scheduleExceptStart'] as String?,
+                              exceptEndHHmm:
+                                  data['scheduleExceptEnd'] as String?,
+                            );
                           }
                           final effective = val && allowedNow;
 
@@ -1594,9 +1800,16 @@ class _DeviceCardState extends State<_DeviceCard>
                                 true &&
                             data['Auto'] != true;
                     final isBlockMode = data['scheduleMode'] == 'block';
-                    final label = isBlockMode
-                        ? "ห้ามรด ${data['scheduleStart']}-${data['scheduleEnd']}"
-                        : "รดได้ ${data['scheduleStart']}-${data['scheduleEnd']}";
+                    final hasException =
+                        data['scheduleExceptEnabled'] == true &&
+                            data['scheduleExceptStart'] != null &&
+                            data['scheduleExceptEnd'] != null;
+                    final label = (isBlockMode
+                            ? "ห้ามรด ${data['scheduleStart']}-${data['scheduleEnd']}"
+                            : "รดได้ ${data['scheduleStart']}-${data['scheduleEnd']}") +
+                        (hasException
+                            ? " (ยกเว้น ${data['scheduleExceptStart']}-${data['scheduleExceptEnd']})"
+                            : "");
                     final color = isSuppressed
                         ? Colors.orange
                         : Theme.of(context).textTheme.bodySmall?.color;
