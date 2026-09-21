@@ -17,6 +17,13 @@ class _ProfilePageState extends State<ProfilePage> {
   bool isSaving = false;
   String? photoUrl;
 
+  // การตั้งค่าว่าจะรับแจ้งเตือน LINE ประเภทไหนบ้าง — เก็บไว้ที่
+  // users/{uid} ยังไม่เคยตั้งค่ามาก่อนถือว่าเปิดรับไว้ก่อน (default true)
+  // ให้ตรงกับพฤติกรรมเดิมของผู้ใช้ที่มีอยู่แล้ว (ดู sendLineAlert ฝั่ง
+  // checkDevices.js)
+  bool _notifyOffline = true;
+  bool _notifyFault = true;
+
   @override
   void initState() {
     super.initState();
@@ -51,8 +58,28 @@ class _ProfilePageState extends State<ProfilePage> {
     setState(() {
       _nameController.text = name;
       photoUrl = data?['pictureUrl'] ?? user.photoURL;
+      _notifyOffline = data?['notifyOffline'] ?? true;
+      _notifyFault = data?['notifyFault'] ?? true;
       isLoading = false;
     });
+  }
+
+  Future<void> _updateNotifyPref(String field, bool value) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    setState(() {
+      if (field == 'notifyOffline') {
+        _notifyOffline = value;
+      } else {
+        _notifyFault = value;
+      }
+    });
+
+    await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
+      {field: value},
+      SetOptions(merge: true),
+    );
   }
 
   Future<void> _saveName() async {
@@ -85,7 +112,8 @@ class _ProfilePageState extends State<ProfilePage> {
             SizedBox(width: 10),
             Text(
               "บันทึกชื่อแล้ว",
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+              style:
+                  TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
             ),
           ],
         ),
@@ -218,6 +246,48 @@ class _ProfilePageState extends State<ProfilePage> {
                                 ],
                               ],
                             ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Card(
+                          child: Column(
+                            children: [
+                              const Padding(
+                                padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+                                child: Row(
+                                  children: [
+                                    Text(
+                                      "การแจ้งเตือน",
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              SwitchListTile(
+                                secondary: const Icon(Icons.cloud_off),
+                                title: const Text("ขาดการติดต่อ"),
+                                subtitle: const Text(
+                                  "แจ้งเตือนเมื่ออุปกรณ์เงียบเกิน 30 นาที",
+                                ),
+                                value: _notifyOffline,
+                                onChanged: (v) =>
+                                    _updateNotifyPref('notifyOffline', v),
+                              ),
+                              SwitchListTile(
+                                secondary:
+                                    const Icon(Icons.report_problem_outlined),
+                                title: const Text("อุปกรณ์ทำงานผิดปกติ"),
+                                subtitle: const Text(
+                                  "วาล์ว, เซนเซอร์ หรือ Nano มีปัญหา",
+                                ),
+                                value: _notifyFault,
+                                onChanged: (v) =>
+                                    _updateNotifyPref('notifyFault', v),
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(height: 16),
