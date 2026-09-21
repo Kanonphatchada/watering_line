@@ -12,9 +12,6 @@ import 'add_device_page.dart';
 import 'profile_page.dart';
 import '../widgets/avatar.dart';
 
-// 🔥 [เพิ่ม] สำหรับกลับไปหน้า login
-import 'login_page.dart';
-
 // ตรงกับ isWithinScheduleWindow ใน functions/checkDevices.js เป๊ะๆ — ใช้ฝั่ง
 // แอปเพื่อให้สวิตช์ Auto ตอบสนองทันทีตอนกด ไม่ต้องรอ backend รอบถัดไป (ทุก
 // 15 นาที) backend จะคอยเช็คซ้ำเผื่อข้ามช่วงเวลาไปเองโดยไม่มีใครแตะสวิตช์
@@ -794,47 +791,8 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                     ),
-
-                    // 🔥 =========================
-                    // 🔥 [เพิ่ม] ปุ่ม LOGOUT
-                    // 🔥 =========================
-                    IconButton(
-                      icon: const Icon(Icons.logout),
-                      onPressed: () async {
-                        // 🔥 popup ยืนยัน
-                        final confirm = await showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text("ยืนยัน"),
-                            content: const Text("ต้องการออกจากระบบหรือไม่"),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, false),
-                                child: const Text("ยกเลิก"),
-                              ),
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, true),
-                                child: const Text("ออก"),
-                              ),
-                            ],
-                          ),
-                        );
-
-                        // 🔥 ถ้ากดยืนยัน
-                        if (confirm == true) {
-                          await FirebaseAuth.instance.signOut();
-
-                          if (!context.mounted) return;
-
-                          Navigator.pushAndRemoveUntil(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => const LoginPage()),
-                            (route) => false,
-                          );
-                        }
-                      },
-                    ),
+                    // ปุ่มออกจากระบบเดิมอยู่ตรงนี้ — ย้ายไปไว้ในหน้าโปรไฟล์
+                    // (ProfilePage มีอยู่แล้ว) ไม่ต้องมีซ้ำ 2 ที่
                   ],
                 ),
               );
