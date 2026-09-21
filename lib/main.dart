@@ -3,12 +3,12 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'web_utils.dart';
+import 'shared/web/web_utils.dart';
 import 'firebase_options.dart';
-import 'pages/login_page.dart';
-import 'pages/home_page.dart';
+import 'features/auth/pages/login_page.dart';
+import 'features/devices/pages/home_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'pages/add_device_page.dart';
+import 'features/devices/pages/add_device_page.dart';
 
 const _brandGreen = Color(0xFF1B5E20);
 
