@@ -1005,7 +1005,11 @@ class _HomePageState extends State<HomePage> {
                             gridDelegate:
                                 const SliverGridDelegateWithMaxCrossAxisExtent(
                               maxCrossAxisExtent: 420,
-                              mainAxisExtent: 480,
+                              // ลดจาก 480 เป็น 412 (480 - 68) พอดีกับความสูงที่
+                              // หายไปตอนเอากราฟเส้นออก (SizedBox 12 + กราฟสูง
+                              // 44 + SizedBox 12) กันไม่ให้เหลือพื้นที่ว่างล่าง
+                              // การ์ดเยอะเกินไป
+                              mainAxisExtent: 412,
                               mainAxisSpacing: 16,
                               crossAxisSpacing: 16,
                             ),
