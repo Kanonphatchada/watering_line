@@ -18,11 +18,6 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  // เปิด/ปิด endDrawer (เมนูรวม) เอง แทนให้ Scaffold ใส่ปุ่ม hamburger
-  // อัตโนมัติ เพราะปุ่มเปิดเมนูอยู่ฝั่งขวาสุดของ AppBar (ตามที่เคยขอไว้) ไม่ใช่
-  // ตำแหน่งเริ่มต้นซ้ายสุดที่ Scaffold คาดไว้
-  final _scaffoldKey = GlobalKey<ScaffoldState>();
-
   // กันไม่ให้ popup แจ้งเตือนอุปกรณ์มีปัญหาเด้งซ้ำทุกครั้งที่ stream ยิง
   // ค่าใหม่มา — โชว์แค่ครั้งเดียวต่อการเปิดหน้านี้หนึ่งรอบ
   bool _alertShown = false;
@@ -47,7 +42,6 @@ class _HomePageState extends State<HomePage> {
     final uid = user!.uid;
 
     return Scaffold(
-      key: _scaffoldKey,
       appBar: AppBar(
         title: const Row(
           children: [
@@ -277,18 +271,14 @@ class _HomePageState extends State<HomePage> {
               );
             },
           ),
-          // เมนูรวม — ย้ายจากป็อปอัพเล็กๆมาเป็น side drawer เต็มความสูงแบบที่
-          // ขอ (ดูตัวอย่าง Larry analytic) เปิดจากขวาสุดของ AppBar เหมือนเดิม
-          // แค่ใช้ endDrawer (เข้าจากขวา) แทน drawer (เข้าจากซ้าย ค่า default)
-          IconButton(
-            tooltip: "เมนู",
-            icon: const Icon(Icons.menu),
-            onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
-          ),
         ],
       ),
-      endDrawer: Drawer(
-        // ต้องครอบด้วย StreamBuilder ของตัวเองเพราะ AppBar/endDrawer สร้าง
+      // เมนูรวม — ย้ายจากป็อปอัพเล็กๆมาเป็น side drawer เต็มความสูงแบบที่ขอ
+      // (ดูตัวอย่าง Larry analytic) ย้ายมาเปิดจากซ้ายสุดตามที่ขอภายหลัง — ใช้
+      // drawer (ไม่ใช่ endDrawer) ทำให้ Scaffold ใส่ปุ่ม hamburger ซ้ายสุดของ
+      // AppBar ให้เองอัตโนมัติ ไม่ต้องสร้างปุ่ม/คุม GlobalKey เองอีกต่อไป
+      drawer: Drawer(
+        // ต้องครอบด้วย StreamBuilder ของตัวเองเพราะ AppBar/drawer สร้าง
         // ก่อน StreamBuilder หลักของหน้า (ที่มี docs) จะยังไม่มีข้อมูล —
         // ใช้ context ตัวนอก (จาก build ของหน้านี้) สำหรับ Navigator.push/
         // เปิด dialog เสมอ ไม่ใช้ context ของ builder นี้ตรงๆ เพราะพอกด
