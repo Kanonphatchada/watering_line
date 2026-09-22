@@ -470,13 +470,7 @@ class DeviceCardState extends State<DeviceCard>
                     // เป็นการตั้งค่าเฉพาะอุปกรณ์นี้ — ต่างจาก "ลบอุปกรณ์" ที่ย้าย
                     // ไปรวมอยู่ในเมนูรวมของหน้าหลักแทนแล้ว)
                     Expanded(
-                      child: ActionButton(
-                        icon: Icons.schedule,
-                        label: "ตั้งเวลา",
-                        showBadge: data['scheduleEnabled'] == true,
-                        onTap: () =>
-                            openDeviceScheduleDialog(context, nanoId, data),
-                      ),
+                      child: _ScheduleActionButton(nanoId: nanoId, data: data),
                     ),
                   ],
                 ),
@@ -494,11 +488,78 @@ class DeviceCardState extends State<DeviceCard>
   }
 }
 
+// หาว่า "ตารางเวลาที่มีผลจริง" ของอุปกรณ์นี้ตอนนี้คืออะไร (หรือ null ถ้าไม่มี
+// เลย) — ใช้ร่วมกันทั้งป้ายบอกตารางเวลาบนการ์ด (_ScheduleStatusLabel) และจุด
+// สีเขียวบนปุ่ม "ตั้งเวลา" (_ScheduleActionButton) กันตรรกะสองที่ไม่ตรงกัน
+// เหมือนที่เคยเกิดมาก่อน (ป้ายเช็ค override+ฟาร์มแล้ว แต่จุดเขียวเช็คแค่ field
+// ของอุปกรณ์เองอย่างเดียว เลยไม่ตรงกัน)
+Map<String, dynamic>? _resolveEffectiveSchedule(
+  Map<String, dynamic> data,
+  Map<String, dynamic>? groupData,
+) {
+  if (data['scheduleOverride'] == true) {
+    if (data['scheduleEnabled'] != true ||
+        data['scheduleStart'] == null ||
+        data['scheduleEnd'] == null) {
+      return null;
+    }
+    return data;
+  }
+
+  if (groupData == null ||
+      groupData['scheduleEnabled'] != true ||
+      groupData['scheduleStart'] == null ||
+      groupData['scheduleEnd'] == null) {
+    return null;
+  }
+  return {
+    'desiredAuto': data['desiredAuto'],
+    'Auto': data['Auto'],
+    'scheduleEnabled': groupData['scheduleEnabled'],
+    'scheduleMode': groupData['scheduleMode'],
+    'scheduleStart': groupData['scheduleStart'],
+    'scheduleEnd': groupData['scheduleEnd'],
+    'scheduleExceptEnabled': groupData['scheduleExceptEnabled'],
+    'scheduleExceptStart': groupData['scheduleExceptStart'],
+    'scheduleExceptEnd': groupData['scheduleExceptEnd'],
+  };
+}
+
+// ถ้า override เอง ไม่ต้อง query เพิ่ม (ใช้ field บนตัวอุปกรณ์ตรงๆ) ถ้าไม่ได้
+// override แต่มี groupId ค่อย listen device_registry/{groupId} เพิ่มเพื่อดึง
+// ตารางเวลาของฟาร์มมาคำนวณแทน — คืนค่า null (ผ่าน builder) ถ้าไม่มีตารางเวลา
+// จากที่ไหนเลย ให้ widget ที่ใช้ตัดสินใจเองว่าจะโชว์อะไรตอนไม่มี
+Widget _withEffectiveSchedule(
+  Map<String, dynamic> data,
+  Widget Function(BuildContext context, Map<String, dynamic>? schedule) builder,
+) {
+  if (data['scheduleOverride'] == true) {
+    return Builder(
+      builder: (context) =>
+          builder(context, _resolveEffectiveSchedule(data, null)),
+    );
+  }
+
+  final groupId = data['groupId'] as String?;
+  if (groupId == null) {
+    return Builder(builder: (context) => builder(context, null));
+  }
+
+  return StreamBuilder<DocumentSnapshot>(
+    stream: FirebaseFirestore.instance
+        .collection('device_registry')
+        .doc(groupId)
+        .snapshots(),
+    builder: (context, snapshot) {
+      final groupData = snapshot.data?.data() as Map<String, dynamic>?;
+      return builder(context, _resolveEffectiveSchedule(data, groupData));
+    },
+  );
+}
+
 // แสดงป้ายตารางเวลาที่กำลังมีผลจริงกับอุปกรณ์นี้ ไม่ว่าจะมาจากตารางเวลาของ
 // อุปกรณ์เอง (scheduleOverride: true) หรือมาจากตารางเวลาของฟาร์มที่สังกัดอยู่
-// (device_registry) ก็ตาม — ถ้า override เอง ใช้ field บนตัวอุปกรณ์ตรงๆ
-// (ไม่ต้อง query เพิ่ม) ถ้าไม่ได้ override แต่มี groupId ค่อย listen
-// device_registry/{groupId} เพิ่มเพื่อดึงตารางเวลาของฟาร์มมาโชว์
+// (device_registry) ก็ตาม
 class _ScheduleStatusLabel extends StatelessWidget {
   final Map<String, dynamic> data;
 
@@ -506,73 +567,63 @@ class _ScheduleStatusLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (data['scheduleOverride'] == true) {
-      return _buildFromSchedule(context, data);
-    }
+    return _withEffectiveSchedule(data, (context, s) {
+      if (s == null) return const SizedBox.shrink();
 
-    final groupId = data['groupId'] as String?;
-    if (groupId == null) return const SizedBox.shrink();
+      final isSuppressed =
+          (s['desiredAuto'] ?? s['Auto'] ?? false) == true && s['Auto'] != true;
+      final isBlockMode = s['scheduleMode'] == 'block';
+      final hasException = s['scheduleExceptEnabled'] == true &&
+          s['scheduleExceptStart'] != null &&
+          s['scheduleExceptEnd'] != null;
+      final label = (isBlockMode
+              ? "ห้ามรด ${s['scheduleStart']}-${s['scheduleEnd']}"
+              : "รดได้ ${s['scheduleStart']}-${s['scheduleEnd']}") +
+          (hasException
+              ? " (ยกเว้น ${s['scheduleExceptStart']}-${s['scheduleExceptEnd']})"
+              : "");
+      final color = isSuppressed
+          ? Colors.orange
+          : Theme.of(context).textTheme.bodySmall?.color;
 
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('device_registry')
-          .doc(groupId)
-          .snapshots(),
-      builder: (context, snapshot) {
-        final groupData = snapshot.data?.data() as Map<String, dynamic>?;
-        if (groupData == null) return const SizedBox.shrink();
-        return _buildFromSchedule(context, {
-          'desiredAuto': data['desiredAuto'],
-          'Auto': data['Auto'],
-          'scheduleEnabled': groupData['scheduleEnabled'],
-          'scheduleMode': groupData['scheduleMode'],
-          'scheduleStart': groupData['scheduleStart'],
-          'scheduleEnd': groupData['scheduleEnd'],
-          'scheduleExceptEnabled': groupData['scheduleExceptEnabled'],
-          'scheduleExceptStart': groupData['scheduleExceptStart'],
-          'scheduleExceptEnd': groupData['scheduleExceptEnd'],
-        });
-      },
-    );
-  }
-
-  Widget _buildFromSchedule(BuildContext context, Map<String, dynamic> s) {
-    if (s['scheduleEnabled'] != true ||
-        s['scheduleStart'] == null ||
-        s['scheduleEnd'] == null) {
-      return const SizedBox.shrink();
-    }
-
-    final isSuppressed =
-        (s['desiredAuto'] ?? s['Auto'] ?? false) == true && s['Auto'] != true;
-    final isBlockMode = s['scheduleMode'] == 'block';
-    final hasException = s['scheduleExceptEnabled'] == true &&
-        s['scheduleExceptStart'] != null &&
-        s['scheduleExceptEnd'] != null;
-    final label = (isBlockMode
-            ? "ห้ามรด ${s['scheduleStart']}-${s['scheduleEnd']}"
-            : "รดได้ ${s['scheduleStart']}-${s['scheduleEnd']}") +
-        (hasException
-            ? " (ยกเว้น ${s['scheduleExceptStart']}-${s['scheduleExceptEnd']})"
-            : "");
-    final color = isSuppressed
-        ? Colors.orange
-        : Theme.of(context).textTheme.bodySmall?.color;
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Row(
-        children: [
-          Icon(Icons.schedule, size: 14, color: color),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Text(
-              isSuppressed ? "$label (Auto หยุดชั่วคราวตอนนี้)" : label,
-              style: TextStyle(fontSize: 11, color: color),
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Row(
+          children: [
+            Icon(Icons.schedule, size: 14, color: color),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                isSuppressed ? "$label (Auto หยุดชั่วคราวตอนนี้)" : label,
+                style: TextStyle(fontSize: 11, color: color),
+              ),
             ),
-          ),
-        ],
-      ),
-    );
+          ],
+        ),
+      );
+    });
+  }
+}
+
+// ปุ่ม "ตั้งเวลา" พร้อมจุดสีเขียวบอกว่ามีตารางเวลากำลังใช้งานอยู่จริงมั้ย —
+// ใช้ตรรกะเดียวกับ _ScheduleStatusLabel เป๊ะๆ (เดิมเช็คแค่ field ของอุปกรณ์
+// เอง ทำให้อุปกรณ์ที่ใช้ตารางเวลาของฟาร์มไม่ขึ้นจุดเขียว และอุปกรณ์ที่เคย
+// override แล้วปิดสวิตช์ไปยังขึ้นจุดเขียวค้างจาก field เก่าที่ไม่ได้ล้าง)
+class _ScheduleActionButton extends StatelessWidget {
+  final String nanoId;
+  final Map<String, dynamic> data;
+
+  const _ScheduleActionButton({required this.nanoId, required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    return _withEffectiveSchedule(data, (context, s) {
+      return ActionButton(
+        icon: Icons.schedule,
+        label: "ตั้งเวลา",
+        showBadge: s != null,
+        onTap: () => openDeviceScheduleDialog(context, nanoId, data),
+      );
+    });
   }
 }
