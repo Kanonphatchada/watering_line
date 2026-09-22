@@ -254,15 +254,27 @@ Future<void> showFarmScheduleEditor(
         continue; // ไม่ทับอุปกรณ์ที่ override ไว้
       }
 
-      final desiredAuto = d['desiredAuto'] ?? d['Auto'] ?? false;
+      // เปิดใช้ตารางเวลาทั้งฟาร์ม = ถือว่ายินยอมให้อุปกรณ์ที่ไม่ได้ override
+      // เองรดน้ำอัตโนมัติตามตารางนี้ทันที ไม่ต้องรอให้เคยเปิด Auto ของตัวเอง
+      // มาก่อน — เดิม fallback ไปดูค่า Auto ปัจจุบันซึ่งมักเป็น false สำหรับ
+      // อุปกรณ์ที่ไม่เคยแตะสวิตช์เลย ทำให้ตารางเวลาทั้งฟาร์มไม่มีผลกับ
+      // อุปกรณ์พวกนั้นเลยแม้จะเปิดใช้ไว้แล้วก็ตาม
+      final desiredAuto =
+          enabled ? true : (d['desiredAuto'] ?? d['Auto'] ?? false);
       final effective =
           enabled ? (desiredAuto == true && allowedNow) : (desiredAuto == true);
-      if (effective == (d['Auto'] == true)) continue;
 
-      batch.update(doc.reference, {
-        'Auto': effective,
-        if (effective) 'Valve': false,
-      });
+      final updates = <String, dynamic>{};
+      if (effective != (d['Auto'] == true)) {
+        updates['Auto'] = effective;
+        if (effective) updates['Valve'] = false;
+      }
+      if (desiredAuto != (d['desiredAuto'] == true)) {
+        updates['desiredAuto'] = desiredAuto;
+      }
+      if (updates.isEmpty) continue;
+
+      batch.update(doc.reference, updates);
     }
     await batch.commit();
 

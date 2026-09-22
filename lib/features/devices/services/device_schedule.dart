@@ -215,28 +215,17 @@ Future<void> openDeviceScheduleDialog(
 
   if (saved != true) return;
 
-  // desiredAuto: ถ้ายังไม่เคยมีมาก่อน ให้เริ่มจากค่า Auto ปัจจุบัน กัน
-  // ไม่ให้ผู้ใช้เปิดตารางเวลาแล้ว Auto ที่เปิดอยู่ก่อนหน้าหายไปเฉยๆ
-  final desiredAuto = data['desiredAuto'] ?? data['Auto'] ?? false;
-
-  final Map<String, dynamic> update = {
-    'scheduleOverride': useOverride,
-    'desiredAuto': desiredAuto,
-  };
-
   bool effective;
+  bool desiredAuto;
   if (useOverride) {
+    // desiredAuto: ถ้ายังไม่เคยมีมาก่อน ให้เริ่มจากค่า Auto ปัจจุบัน กัน
+    // ไม่ให้ผู้ใช้เปิดตารางเวลาแล้ว Auto ที่เปิดอยู่ก่อนหน้าหายไปเฉยๆ
+    desiredAuto = data['desiredAuto'] ?? data['Auto'] ?? false;
+
     final startHHmm = formatHHmm(start);
     final endHHmm = formatHHmm(end);
     final exceptStartHHmm = formatHHmm(exceptStart);
     final exceptEndHHmm = formatHHmm(exceptEnd);
-    update['scheduleEnabled'] = enabled;
-    update['scheduleMode'] = mode;
-    update['scheduleStart'] = startHHmm;
-    update['scheduleEnd'] = endHHmm;
-    update['scheduleExceptEnabled'] = exceptEnabled;
-    update['scheduleExceptStart'] = exceptStartHHmm;
-    update['scheduleExceptEnd'] = exceptEndHHmm;
 
     if (!enabled) {
       effective = desiredAuto == true;
@@ -253,7 +242,15 @@ Future<void> openDeviceScheduleDialog(
     }
   } else {
     // ไม่ override — ใช้ตารางเวลาของฟาร์มที่ดึงมาแสดงไว้ในไดอะล็อกนี้แล้ว
-    if (groupSchedule?['scheduleEnabled'] == true) {
+    // เปิดใช้ตารางเวลาของฟาร์มอยู่แล้ว = ถือว่ายินยอมให้อุปกรณ์นี้รดน้ำ
+    // อัตโนมัติตามตารางนั้นทันที ไม่ต้องรอให้เคยเปิด Auto มาก่อน (เหมือนกับ
+    // ตอนเปิด/บันทึกตารางเวลาทั้งฟาร์มจากเมนูรวม)
+    final groupScheduleEnabled = groupSchedule?['scheduleEnabled'] == true;
+    desiredAuto = groupScheduleEnabled
+        ? true
+        : (data['desiredAuto'] ?? data['Auto'] ?? false);
+
+    if (groupScheduleEnabled) {
       final gStart = groupSchedule?['scheduleStart'] as String?;
       final gEnd = groupSchedule?['scheduleEnd'] as String?;
       if (gStart != null && gEnd != null) {
@@ -272,6 +269,20 @@ Future<void> openDeviceScheduleDialog(
     } else {
       effective = desiredAuto == true;
     }
+  }
+
+  final Map<String, dynamic> update = {
+    'scheduleOverride': useOverride,
+    'desiredAuto': desiredAuto,
+  };
+  if (useOverride) {
+    update['scheduleEnabled'] = enabled;
+    update['scheduleMode'] = mode;
+    update['scheduleStart'] = formatHHmm(start);
+    update['scheduleEnd'] = formatHHmm(end);
+    update['scheduleExceptEnabled'] = exceptEnabled;
+    update['scheduleExceptStart'] = formatHHmm(exceptStart);
+    update['scheduleExceptEnd'] = formatHHmm(exceptEnd);
   }
   update['Auto'] = effective;
   if (effective) update['Valve'] = false;
