@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../auth/pages/login_page.dart';
 import '../../../shared/widgets/avatar.dart';
+import '../../../main.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -288,6 +289,27 @@ class _ProfilePageState extends State<ProfilePage> {
                                     _updateNotifyPref('notifyFault', v),
                               ),
                             ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        // ย้ายมาจากหน้าหลัก — ปุ่มสลับโหมดมืด/สว่างเคยอยู่ใน
+                        // AppBar ของหน้าหลัก แต่ไปแย่งที่กับชื่อหน้า "หน้าหลัก"
+                        // จนดูแน่นเกินไป ย้ายมาไว้ในโปรไฟล์แทน
+                        Card(
+                          child: ValueListenableBuilder<ThemeMode>(
+                            valueListenable: themeModeNotifier,
+                            builder: (context, mode, _) {
+                              return SwitchListTile(
+                                secondary: Icon(
+                                  mode == ThemeMode.dark
+                                      ? Icons.dark_mode
+                                      : Icons.light_mode,
+                                ),
+                                title: const Text("โหมดมืด"),
+                                value: mode == ThemeMode.dark,
+                                onChanged: (_) => toggleThemeMode(),
+                              );
+                            },
                           ),
                         ),
                         const SizedBox(height: 16),
