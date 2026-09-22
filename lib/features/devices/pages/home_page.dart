@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'add_device_page.dart';
+import 'schedule_overview_page.dart';
 import '../../profile/pages/profile_page.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../services/farm_schedule.dart';
@@ -296,6 +297,13 @@ class _HomePageState extends State<HomePage> {
                       );
                     case 'schedule':
                       openFarmScheduleDialog(context, menuDocs);
+                    case 'schedule_overview':
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ScheduleOverviewPage(docs: menuDocs),
+                        ),
+                      );
                     case 'search':
                       setState(() => _searchBarVisible = !_searchBarVisible);
                     case 'remove':
@@ -320,6 +328,16 @@ class _HomePageState extends State<HomePage> {
                         Icon(Icons.schedule),
                         SizedBox(width: 8),
                         Text("ตั้งเวลาทั้งฟาร์ม"),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'schedule_overview',
+                    child: Row(
+                      children: [
+                        Icon(Icons.fact_check_outlined),
+                        SizedBox(width: 8),
+                        Text("สรุปตารางเวลา"),
                       ],
                     ),
                   ),
