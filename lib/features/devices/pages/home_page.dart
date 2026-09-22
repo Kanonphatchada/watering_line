@@ -283,108 +283,74 @@ class _HomePageState extends State<HomePage> {
                 .snapshots(),
             builder: (context, menuSnapshot) {
               final menuDocs = menuSnapshot.data?.docs ?? [];
-              return PopupMenuButton<String>(
-                tooltip: "เมนู",
-                icon: const Icon(Icons.menu),
-                onSelected: (value) {
-                  switch (value) {
-                    case 'add':
+              // เปลี่ยนจาก PopupMenuButton (widget รุ่นเก่า ไม่รองรับเมนูซ้อน
+              // เมนูจริงๆ) มาเป็น MenuAnchor/SubmenuButton (widget รุ่นใหม่
+              // ของ Flutter) เพื่อให้ "ตารางเวลา" เป็นเมนูย่อยที่กดขยายได้
+              // จริง ไม่ใช่แค่หัวข้อกดไม่ได้แบบเดิม
+              return MenuAnchor(
+                builder: (context, controller, child) {
+                  return IconButton(
+                    tooltip: "เมนู",
+                    icon: const Icon(Icons.menu),
+                    onPressed: () {
+                      if (controller.isOpen) {
+                        controller.close();
+                      } else {
+                        controller.open();
+                      }
+                    },
+                  );
+                },
+                menuChildren: [
+                  MenuItemButton(
+                    leadingIcon: const Icon(Icons.add_circle_outline_rounded),
+                    onPressed: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (_) => const AddDevicePage(),
                         ),
                       );
-                    case 'schedule':
-                      openFarmScheduleDialog(context, menuDocs);
-                    case 'schedule_overview':
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ScheduleOverviewPage(docs: menuDocs),
-                        ),
-                      );
-                    case 'search':
-                      setState(() => _searchBarVisible = !_searchBarVisible);
-                    case 'remove':
-                      openRemoveDevicePicker(context, menuDocs);
-                  }
-                },
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'add',
-                    child: Row(
-                      children: [
-                        Icon(Icons.add_circle_outline_rounded),
-                        SizedBox(width: 8),
-                        Text("เพิ่มอุปกรณ์"),
-                      ],
-                    ),
+                    },
+                    child: const Text("เพิ่มอุปกรณ์"),
                   ),
-                  // หัวข้อย่อย "ตารางเวลา" ครอบ 2 เมนูที่เกี่ยวกับตารางเวลา
-                  // รดน้ำไว้ด้วยกัน (ตั้งเวลาทั้งฟาร์ม + สรุปตารางเวลา) ให้ดู
-                  // เป็นกลุ่มเดียวกันชัดเจนขึ้น แทนที่จะปนอยู่กับเมนูอื่นเฉยๆ
-                  // — PopupMenuItem ปกติไม่รองรับเมนูย่อยแบบซ้อน (submenu)
-                  // จริงๆ เลยใช้หัวข้อแบบ enabled: false (กดไม่ได้ แค่เป็น
-                  // ป้ายบอกกลุ่ม) แทน
-                  const PopupMenuItem(
-                    enabled: false,
-                    height: 32,
-                    child: Text(
-                      "ตารางเวลา",
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey,
+                  SubmenuButton(
+                    leadingIcon: const Icon(Icons.schedule),
+                    menuChildren: [
+                      MenuItemButton(
+                        leadingIcon: const Icon(Icons.schedule),
+                        onPressed: () =>
+                            openFarmScheduleDialog(context, menuDocs),
+                        child: const Text("ตั้งเวลาทั้งฟาร์ม"),
                       ),
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'schedule',
-                    child: Padding(
-                      padding: EdgeInsets.only(left: 12),
-                      child: Row(
-                        children: [
-                          Icon(Icons.schedule),
-                          SizedBox(width: 8),
-                          Text("ตั้งเวลาทั้งฟาร์ม"),
-                        ],
+                      MenuItemButton(
+                        leadingIcon: const Icon(Icons.fact_check_outlined),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  ScheduleOverviewPage(docs: menuDocs),
+                            ),
+                          );
+                        },
+                        child: const Text("สรุปตารางเวลา"),
                       ),
-                    ),
+                    ],
+                    child: const Text("ตารางเวลา"),
                   ),
-                  const PopupMenuItem(
-                    value: 'schedule_overview',
-                    child: Padding(
-                      padding: EdgeInsets.only(left: 12),
-                      child: Row(
-                        children: [
-                          Icon(Icons.fact_check_outlined),
-                          SizedBox(width: 8),
-                          Text("สรุปตารางเวลา"),
-                        ],
-                      ),
-                    ),
+                  MenuItemButton(
+                    leadingIcon: const Icon(Icons.search),
+                    onPressed: () =>
+                        setState(() => _searchBarVisible = !_searchBarVisible),
+                    child: const Text("ค้นหาอุปกรณ์"),
                   ),
-                  const PopupMenuDivider(),
-                  const PopupMenuItem(
-                    value: 'search',
-                    child: Row(
-                      children: [
-                        Icon(Icons.search),
-                        SizedBox(width: 8),
-                        Text("ค้นหาอุปกรณ์"),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'remove',
-                    child: Row(
-                      children: [
-                        Icon(Icons.delete_outline, color: Colors.red),
-                        SizedBox(width: 8),
-                        Text("ลบอุปกรณ์", style: TextStyle(color: Colors.red)),
-                      ],
-                    ),
+                  MenuItemButton(
+                    leadingIcon:
+                        const Icon(Icons.delete_outline, color: Colors.red),
+                    onPressed: () => openRemoveDevicePicker(context, menuDocs),
+                    child: const Text("ลบอุปกรณ์",
+                        style: TextStyle(color: Colors.red)),
                   ),
                 ],
               );
