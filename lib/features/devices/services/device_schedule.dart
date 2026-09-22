@@ -10,8 +10,19 @@ Future<void> openDeviceScheduleDialog(
   String nanoId,
   Map<String, dynamic> data,
 ) async {
-  bool useOverride = data['scheduleOverride'] == true;
-  bool enabled = data['scheduleEnabled'] == true;
+  final initialOverride = data['scheduleOverride'] == true;
+  final initialEnabled = data['scheduleEnabled'] == true;
+  // 3 ทางเลือกตรงๆแทนสวิตช์ซ้อนสวิตช์ 2 ชั้นแบบเดิม (ตั้งเวลาเฉพาะอุปกรณ์นี้
+  // + เปิดใช้ตารางเวลา) ที่ผู้ใช้จริงงงว่าทำไมต้อง "เปิด" สวิตช์นึงเพื่อจะ
+  // "ปิด" ตารางเวลาไปเลย — ตัวแปรนี้แค่กำหนดว่า UI จะโชว์อะไร ตอนบันทึกจะ
+  // แปลงกลับเป็น useOverride/enabled เหมือนเดิมเป๊ะ ไม่กระทบโครงสร้างข้อมูล
+  // ใน Firestore เลย:
+  //   'farm'   -> useOverride: false (ตามตารางเวลาของฟาร์ม)
+  //   'custom' -> useOverride: true, enabled: true (ตั้งเวลาของตัวเอง)
+  //   'none'   -> useOverride: true, enabled: false (ยกเลิกตารางเวลา,
+  //               รดน้ำตามความชื้นอย่างเดียวเหมือนก่อนมีฟีเจอร์นี้)
+  String choice =
+      !initialOverride ? 'farm' : (initialEnabled ? 'custom' : 'none');
   // "allow" = รดได้เฉพาะในช่วงนี้เท่านั้น, "block" = รดได้ตลอดยกเว้นในช่วง
   // นี้ (เช่น เช้า-เย็น ยกเว้นเที่ยง แค่ตั้ง block 11:00-14:00 พอ) ถ้าต้องการ
   // รดได้เฉพาะช่วงหนึ่งแล้วยังห้ามรดซ้อนอีกช่วงย่อยข้างใน (เช่น รดได้
@@ -58,14 +69,14 @@ Future<void> openDeviceScheduleDialog(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SwitchListTile(
+                RadioListTile<String>(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text("ตั้งเวลาเฉพาะอุปกรณ์นี้"),
-                  subtitle: const Text("ไม่ใช้ตารางเวลาของฟาร์ม"),
-                  value: useOverride,
-                  onChanged: (v) => setDialogState(() => useOverride = v),
+                  title: const Text("ตามตารางเวลาของฟาร์ม"),
+                  value: 'farm',
+                  groupValue: choice,
+                  onChanged: (v) => setDialogState(() => choice = v!),
                 ),
-                if (!useOverride) ...[
+                if (choice == 'farm') ...[
                   const SizedBox(height: 4),
                   Container(
                     padding: const EdgeInsets.all(10),
@@ -84,17 +95,26 @@ Future<void> openDeviceScheduleDialog(
                       style: const TextStyle(fontSize: 12),
                     ),
                   ),
-                ],
-                if (useOverride) ...[
                   const SizedBox(height: 4),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text("เปิดใช้ตารางเวลา"),
-                    value: enabled,
-                    onChanged: (v) => setDialogState(() => enabled = v),
-                  ),
                 ],
-                if (useOverride && enabled) ...[
+                RadioListTile<String>(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text("ตั้งเวลาเฉพาะการ์ดนี้"),
+                  value: 'custom',
+                  groupValue: choice,
+                  onChanged: (v) => setDialogState(() => choice = v!),
+                ),
+                RadioListTile<String>(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text("ยกเลิกการตั้งเวลา"),
+                  subtitle: const Text(
+                    "รดน้ำตามความชื้นอย่างเดียว ไม่มีข้อจำกัดเรื่องเวลา",
+                  ),
+                  value: 'none',
+                  groupValue: choice,
+                  onChanged: (v) => setDialogState(() => choice = v!),
+                ),
+                if (choice == 'custom') ...[
                   const SizedBox(height: 4),
                   SegmentedButton<String>(
                     segments: const [
@@ -214,6 +234,12 @@ Future<void> openDeviceScheduleDialog(
   );
 
   if (saved != true) return;
+
+  // แปลงตัวเลือกกลับเป็น useOverride/enabled เดิมตอนบันทึก — 'none' คือ
+  // override: true, enabled: false (ยกเลิกตารางเวลา ใช้ desiredAuto ตรงๆ
+  // ไม่มีการเช็คเวลาเลย เหมือนก่อนมีฟีเจอร์นี้)
+  final useOverride = choice != 'farm';
+  final enabled = choice == 'custom';
 
   bool effective;
   bool desiredAuto;
