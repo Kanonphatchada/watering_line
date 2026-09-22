@@ -321,26 +321,51 @@ class _HomePageState extends State<HomePage> {
                       ],
                     ),
                   ),
+                  // หัวข้อย่อย "ตารางเวลา" ครอบ 2 เมนูที่เกี่ยวกับตารางเวลา
+                  // รดน้ำไว้ด้วยกัน (ตั้งเวลาทั้งฟาร์ม + สรุปตารางเวลา) ให้ดู
+                  // เป็นกลุ่มเดียวกันชัดเจนขึ้น แทนที่จะปนอยู่กับเมนูอื่นเฉยๆ
+                  // — PopupMenuItem ปกติไม่รองรับเมนูย่อยแบบซ้อน (submenu)
+                  // จริงๆ เลยใช้หัวข้อแบบ enabled: false (กดไม่ได้ แค่เป็น
+                  // ป้ายบอกกลุ่ม) แทน
+                  const PopupMenuItem(
+                    enabled: false,
+                    height: 32,
+                    child: Text(
+                      "ตารางเวลา",
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ),
                   const PopupMenuItem(
                     value: 'schedule',
-                    child: Row(
-                      children: [
-                        Icon(Icons.schedule),
-                        SizedBox(width: 8),
-                        Text("ตั้งเวลาทั้งฟาร์ม"),
-                      ],
+                    child: Padding(
+                      padding: EdgeInsets.only(left: 12),
+                      child: Row(
+                        children: [
+                          Icon(Icons.schedule),
+                          SizedBox(width: 8),
+                          Text("ตั้งเวลาทั้งฟาร์ม"),
+                        ],
+                      ),
                     ),
                   ),
                   const PopupMenuItem(
                     value: 'schedule_overview',
-                    child: Row(
-                      children: [
-                        Icon(Icons.fact_check_outlined),
-                        SizedBox(width: 8),
-                        Text("สรุปตารางเวลา"),
-                      ],
+                    child: Padding(
+                      padding: EdgeInsets.only(left: 12),
+                      child: Row(
+                        children: [
+                          Icon(Icons.fact_check_outlined),
+                          SizedBox(width: 8),
+                          Text("สรุปตารางเวลา"),
+                        ],
+                      ),
                     ),
                   ),
+                  const PopupMenuDivider(),
                   const PopupMenuItem(
                     value: 'search',
                     child: Row(
