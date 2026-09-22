@@ -18,6 +18,11 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  // เปิด/ปิด endDrawer (เมนูรวม) เอง แทนให้ Scaffold ใส่ปุ่ม hamburger
+  // อัตโนมัติ เพราะปุ่มเปิดเมนูอยู่ฝั่งขวาสุดของ AppBar (ตามที่เคยขอไว้) ไม่ใช่
+  // ตำแหน่งเริ่มต้นซ้ายสุดที่ Scaffold คาดไว้
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+
   // กันไม่ให้ popup แจ้งเตือนอุปกรณ์มีปัญหาเด้งซ้ำทุกครั้งที่ stream ยิง
   // ค่าใหม่มา — โชว์แค่ครั้งเดียวต่อการเปิดหน้านี้หนึ่งรอบ
   bool _alertShown = false;
@@ -42,6 +47,7 @@ class _HomePageState extends State<HomePage> {
     final uid = user!.uid;
 
     return Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
         title: const Row(
           children: [
@@ -271,40 +277,66 @@ class _HomePageState extends State<HomePage> {
               );
             },
           ),
-          // เมนูรวม — เดิมมี "เพิ่มอุปกรณ์" เป็นปุ่มแยก + "ตั้งเวลาทั้งฟาร์ม"
-          // กับช่องค้นหาอยู่อีกแถวใต้แถบสรุป รวมเข้าเมนูเดียวให้ดูเป็น
-          // ระเบียบขึ้น ต้องครอบด้วย StreamBuilder ของตัวเองเพราะ AppBar
-          // สร้างก่อน StreamBuilder หลักของหน้า (ที่มี docs) จะยังไม่มีข้อมูล
-          // — ย้ายมาไว้ขวาสุดของแถบ (หลังไอคอนโปรไฟล์) ตามที่ขอ
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('ESP32')
-                .where('uid', isEqualTo: uid)
-                .snapshots(),
-            builder: (context, menuSnapshot) {
-              final menuDocs = menuSnapshot.data?.docs ?? [];
-              // เปลี่ยนจาก PopupMenuButton (widget รุ่นเก่า ไม่รองรับเมนูซ้อน
-              // เมนูจริงๆ) มาเป็น MenuAnchor/SubmenuButton (widget รุ่นใหม่
-              // ของ Flutter) เพื่อให้ "ตารางเวลา" เป็นเมนูย่อยที่กดขยายได้
-              // จริง ไม่ใช่แค่หัวข้อกดไม่ได้แบบเดิม
-              return MenuAnchor(
-                builder: (context, controller, child) {
-                  return IconButton(
-                    tooltip: "เมนู",
-                    icon: const Icon(Icons.menu),
-                    onPressed: () {
-                      if (controller.isOpen) {
-                        controller.close();
-                      } else {
-                        controller.open();
-                      }
-                    },
-                  );
-                },
-                menuChildren: [
-                  MenuItemButton(
-                    leadingIcon: const Icon(Icons.add_circle_outline_rounded),
-                    onPressed: () {
+          // เมนูรวม — ย้ายจากป็อปอัพเล็กๆมาเป็น side drawer เต็มความสูงแบบที่
+          // ขอ (ดูตัวอย่าง Larry analytic) เปิดจากขวาสุดของ AppBar เหมือนเดิม
+          // แค่ใช้ endDrawer (เข้าจากขวา) แทน drawer (เข้าจากซ้าย ค่า default)
+          IconButton(
+            tooltip: "เมนู",
+            icon: const Icon(Icons.menu),
+            onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
+          ),
+        ],
+      ),
+      endDrawer: Drawer(
+        // ต้องครอบด้วย StreamBuilder ของตัวเองเพราะ AppBar/endDrawer สร้าง
+        // ก่อน StreamBuilder หลักของหน้า (ที่มี docs) จะยังไม่มีข้อมูล —
+        // ใช้ context ตัวนอก (จาก build ของหน้านี้) สำหรับ Navigator.push/
+        // เปิด dialog เสมอ ไม่ใช้ context ของ builder นี้ตรงๆ เพราะพอกด
+        // Navigator.pop(ปิด drawer) ไปแล้ว widget ของ drawer จะถูกถอดออกจาก
+        // ต้นไม้ ทำให้ context นั้นใช้ต่อไม่ได้อีก
+        child: StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('ESP32')
+              .where('uid', isEqualTo: uid)
+              .snapshots(),
+          builder: (drawerContext, menuSnapshot) {
+            final menuDocs = menuSnapshot.data?.docs ?? [];
+            return SafeArea(
+              child: ListView(
+                padding: EdgeInsets.zero,
+                children: [
+                  DrawerHeader(
+                    decoration: BoxDecoration(
+                      color:
+                          Theme.of(drawerContext).appBarTheme.backgroundColor,
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.eco_rounded,
+                            color: Colors.white, size: 32),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Text(
+                            "หน้าหลัก",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: Colors.white),
+                          onPressed: () => Navigator.pop(drawerContext),
+                        ),
+                      ],
+                    ),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.add_circle_outline_rounded),
+                    title: const Text("เพิ่มอุปกรณ์"),
+                    onTap: () {
+                      Navigator.pop(drawerContext);
                       Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -312,20 +344,27 @@ class _HomePageState extends State<HomePage> {
                         ),
                       );
                     },
-                    child: const Text("เพิ่มอุปกรณ์"),
                   ),
-                  SubmenuButton(
-                    leadingIcon: const Icon(Icons.schedule),
-                    menuChildren: [
-                      MenuItemButton(
-                        leadingIcon: const Icon(Icons.schedule),
-                        onPressed: () =>
-                            openFarmScheduleDialog(context, menuDocs),
-                        child: const Text("ตั้งเวลาทั้งฟาร์ม"),
+                  ExpansionTile(
+                    leading: const Icon(Icons.schedule),
+                    title: const Text("ตารางเวลา"),
+                    children: [
+                      ListTile(
+                        contentPadding: const EdgeInsets.only(left: 32),
+                        leading: const Icon(Icons.schedule, size: 20),
+                        title: const Text("ตั้งเวลาทั้งฟาร์ม"),
+                        onTap: () {
+                          Navigator.pop(drawerContext);
+                          openFarmScheduleDialog(context, menuDocs);
+                        },
                       ),
-                      MenuItemButton(
-                        leadingIcon: const Icon(Icons.fact_check_outlined),
-                        onPressed: () {
+                      ListTile(
+                        contentPadding: const EdgeInsets.only(left: 32),
+                        leading:
+                            const Icon(Icons.fact_check_outlined, size: 20),
+                        title: const Text("สรุปตารางเวลา"),
+                        onTap: () {
+                          Navigator.pop(drawerContext);
                           Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -334,29 +373,32 @@ class _HomePageState extends State<HomePage> {
                             ),
                           );
                         },
-                        child: const Text("สรุปตารางเวลา"),
                       ),
                     ],
-                    child: const Text("ตารางเวลา"),
                   ),
-                  MenuItemButton(
-                    leadingIcon: const Icon(Icons.search),
-                    onPressed: () =>
-                        setState(() => _searchBarVisible = !_searchBarVisible),
-                    child: const Text("ค้นหาอุปกรณ์"),
+                  ListTile(
+                    leading: const Icon(Icons.search),
+                    title: const Text("ค้นหาอุปกรณ์"),
+                    onTap: () {
+                      Navigator.pop(drawerContext);
+                      setState(() => _searchBarVisible = !_searchBarVisible);
+                    },
                   ),
-                  MenuItemButton(
-                    leadingIcon:
+                  ListTile(
+                    leading:
                         const Icon(Icons.delete_outline, color: Colors.red),
-                    onPressed: () => openRemoveDevicePicker(context, menuDocs),
-                    child: const Text("ลบอุปกรณ์",
+                    title: const Text("ลบอุปกรณ์",
                         style: TextStyle(color: Colors.red)),
+                    onTap: () {
+                      Navigator.pop(drawerContext);
+                      openRemoveDevicePicker(context, menuDocs);
+                    },
                   ),
                 ],
-              );
-            },
-          ),
-        ],
+              ),
+            );
+          },
+        ),
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
