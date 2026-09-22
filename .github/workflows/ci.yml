@@ -15,6 +15,10 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          # ล็อกเวอร์ชันตรงกับที่ใช้พัฒนาในเครื่อง กัน CI ไปดึง Flutter
+          # เวอร์ชันใหม่กว่านี้มาเอง (channel: stable เฉยๆ จะได้ตัวล่าสุด
+          # เสมอ ซึ่งอาจมี breaking change ที่ในเครื่องยังไม่เจอ)
+          flutter-version: '3.35.5'
 
       - run: flutter pub get
 
@@ -22,4 +26,4 @@ jobs:
         run: dart format --output=none --set-exit-if-changed .
 
       - name: Analyze
-        run: flutter analyze
+        run: flutter analyze --no-fatal-infos

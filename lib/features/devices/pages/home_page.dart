@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'add_device_page.dart';
+import 'schedule_overview_page.dart';
 import '../../profile/pages/profile_page.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../services/farm_schedule.dart';
@@ -270,84 +271,124 @@ class _HomePageState extends State<HomePage> {
               );
             },
           ),
-          // เมนูรวม — เดิมมี "เพิ่มอุปกรณ์" เป็นปุ่มแยก + "ตั้งเวลาทั้งฟาร์ม"
-          // กับช่องค้นหาอยู่อีกแถวใต้แถบสรุป รวมเข้าเมนูเดียวให้ดูเป็น
-          // ระเบียบขึ้น ต้องครอบด้วย StreamBuilder ของตัวเองเพราะ AppBar
-          // สร้างก่อน StreamBuilder หลักของหน้า (ที่มี docs) จะยังไม่มีข้อมูล
-          // — ย้ายมาไว้ขวาสุดของแถบ (หลังไอคอนโปรไฟล์) ตามที่ขอ
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('ESP32')
-                .where('uid', isEqualTo: uid)
-                .snapshots(),
-            builder: (context, menuSnapshot) {
-              final menuDocs = menuSnapshot.data?.docs ?? [];
-              return PopupMenuButton<String>(
-                tooltip: "เมนู",
-                icon: const Icon(Icons.menu),
-                onSelected: (value) {
-                  switch (value) {
-                    case 'add':
+        ],
+      ),
+      // เมนูรวม — ย้ายจากป็อปอัพเล็กๆมาเป็น side drawer เต็มความสูงแบบที่ขอ
+      // (ดูตัวอย่าง Larry analytic) ย้ายมาเปิดจากซ้ายสุดตามที่ขอภายหลัง — ใช้
+      // drawer (ไม่ใช่ endDrawer) ทำให้ Scaffold ใส่ปุ่ม hamburger ซ้ายสุดของ
+      // AppBar ให้เองอัตโนมัติ ไม่ต้องสร้างปุ่ม/คุม GlobalKey เองอีกต่อไป
+      drawer: Drawer(
+        // ต้องครอบด้วย StreamBuilder ของตัวเองเพราะ AppBar/drawer สร้าง
+        // ก่อน StreamBuilder หลักของหน้า (ที่มี docs) จะยังไม่มีข้อมูล —
+        // ใช้ context ตัวนอก (จาก build ของหน้านี้) สำหรับ Navigator.push/
+        // เปิด dialog เสมอ ไม่ใช้ context ของ builder นี้ตรงๆ เพราะพอกด
+        // Navigator.pop(ปิด drawer) ไปแล้ว widget ของ drawer จะถูกถอดออกจาก
+        // ต้นไม้ ทำให้ context นั้นใช้ต่อไม่ได้อีก
+        child: StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('ESP32')
+              .where('uid', isEqualTo: uid)
+              .snapshots(),
+          builder: (drawerContext, menuSnapshot) {
+            final menuDocs = menuSnapshot.data?.docs ?? [];
+            return SafeArea(
+              child: ListView(
+                padding: EdgeInsets.zero,
+                children: [
+                  DrawerHeader(
+                    decoration: BoxDecoration(
+                      color:
+                          Theme.of(drawerContext).appBarTheme.backgroundColor,
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.eco_rounded,
+                            color: Colors.white, size: 32),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Text(
+                            "หน้าหลัก",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: Colors.white),
+                          onPressed: () => Navigator.pop(drawerContext),
+                        ),
+                      ],
+                    ),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.add_circle_outline_rounded),
+                    title: const Text("เพิ่มอุปกรณ์"),
+                    onTap: () {
+                      Navigator.pop(drawerContext);
                       Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (_) => const AddDevicePage(),
                         ),
                       );
-                    case 'schedule':
-                      openFarmScheduleDialog(context, menuDocs);
-                    case 'search':
+                    },
+                  ),
+                  ExpansionTile(
+                    leading: const Icon(Icons.schedule),
+                    title: const Text("ตารางเวลา"),
+                    children: [
+                      ListTile(
+                        contentPadding: const EdgeInsets.only(left: 32),
+                        leading: const Icon(Icons.schedule, size: 20),
+                        title: const Text("ตั้งเวลาทั้งฟาร์ม"),
+                        onTap: () {
+                          Navigator.pop(drawerContext);
+                          openFarmScheduleDialog(context, menuDocs);
+                        },
+                      ),
+                      ListTile(
+                        contentPadding: const EdgeInsets.only(left: 32),
+                        leading:
+                            const Icon(Icons.fact_check_outlined, size: 20),
+                        title: const Text("สรุปตารางเวลา"),
+                        onTap: () {
+                          Navigator.pop(drawerContext);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  ScheduleOverviewPage(docs: menuDocs),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.search),
+                    title: const Text("ค้นหาอุปกรณ์"),
+                    onTap: () {
+                      Navigator.pop(drawerContext);
                       setState(() => _searchBarVisible = !_searchBarVisible);
-                    case 'remove':
+                    },
+                  ),
+                  ListTile(
+                    leading:
+                        const Icon(Icons.delete_outline, color: Colors.red),
+                    title: const Text("ลบอุปกรณ์",
+                        style: TextStyle(color: Colors.red)),
+                    onTap: () {
+                      Navigator.pop(drawerContext);
                       openRemoveDevicePicker(context, menuDocs);
-                  }
-                },
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'add',
-                    child: Row(
-                      children: [
-                        Icon(Icons.add_circle_outline_rounded),
-                        SizedBox(width: 8),
-                        Text("เพิ่มอุปกรณ์"),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'schedule',
-                    child: Row(
-                      children: [
-                        Icon(Icons.schedule),
-                        SizedBox(width: 8),
-                        Text("ตั้งเวลาทั้งฟาร์ม"),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'search',
-                    child: Row(
-                      children: [
-                        Icon(Icons.search),
-                        SizedBox(width: 8),
-                        Text("ค้นหาอุปกรณ์"),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'remove',
-                    child: Row(
-                      children: [
-                        Icon(Icons.delete_outline, color: Colors.red),
-                        SizedBox(width: 8),
-                        Text("ลบอุปกรณ์", style: TextStyle(color: Colors.red)),
-                      ],
-                    ),
+                    },
                   ),
                 ],
-              );
-            },
-          ),
-        ],
+              ),
+            );
+          },
+        ),
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance

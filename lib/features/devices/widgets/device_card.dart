@@ -314,52 +314,17 @@ class DeviceCardState extends State<DeviceCard>
                     ),
                   ],
                 ),
-                // ถ้าเปิดตารางเวลาไว้ และผู้ใช้ตั้งใจเปิด Auto แต่ตอนนี้ไม่ใช่
-                // โชว์ตารางเวลาที่ตั้งไว้เสมอเมื่อเปิดใช้ (ไม่ใช่โชว์แค่ตอนถูก
-                // บังคับปิดอยู่) จะได้เห็นว่าตั้งไว้กี่โมงถึงกี่โมงโดยไม่ต้อง
-                // กดเข้าไปดู — ถ้าตอนนี้กำลังถูกตารางเวลาบังคับปิด Auto อยู่
-                // จะเปลี่ยนสีเป็นส้มเน้นให้เห็นชัดว่าทำไม Auto ไม่ทำงาน
-                if (data['scheduleEnabled'] == true &&
-                    data['scheduleStart'] != null &&
-                    data['scheduleEnd'] != null)
-                  Builder(builder: (context) {
-                    final isSuppressed =
-                        (data['desiredAuto'] ?? data['Auto'] ?? false) ==
-                                true &&
-                            data['Auto'] != true;
-                    final isBlockMode = data['scheduleMode'] == 'block';
-                    final hasException =
-                        data['scheduleExceptEnabled'] == true &&
-                            data['scheduleExceptStart'] != null &&
-                            data['scheduleExceptEnd'] != null;
-                    final label = (isBlockMode
-                            ? "ห้ามรด ${data['scheduleStart']}-${data['scheduleEnd']}"
-                            : "รดได้ ${data['scheduleStart']}-${data['scheduleEnd']}") +
-                        (hasException
-                            ? " (ยกเว้น ${data['scheduleExceptStart']}-${data['scheduleExceptEnd']})"
-                            : "");
-                    final color = isSuppressed
-                        ? Colors.orange
-                        : Theme.of(context).textTheme.bodySmall?.color;
-
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Row(
-                        children: [
-                          Icon(Icons.schedule, size: 14, color: color),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              isSuppressed
-                                  ? "$label (Auto หยุดชั่วคราวตอนนี้)"
-                                  : label,
-                              style: TextStyle(fontSize: 11, color: color),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
+                // ถ้าเปิดตารางเวลาไว้ (ของตัวเองหรือของฟาร์มที่สังกัดอยู่ก็ได้)
+                // และผู้ใช้ตั้งใจเปิด Auto แต่ตอนนี้ไม่ใช่ โชว์ตารางเวลาที่
+                // ตั้งไว้เสมอเมื่อเปิดใช้ (ไม่ใช่โชว์แค่ตอนถูกบังคับปิดอยู่)
+                // จะได้เห็นว่าตั้งไว้กี่โมงถึงกี่โมงโดยไม่ต้องกดเข้าไปดู — ถ้า
+                // ตอนนี้กำลังถูกตารางเวลาบังคับปิด Auto อยู่ จะเปลี่ยนสีเป็น
+                // ส้มเน้นให้เห็นชัดว่าทำไม Auto ไม่ทำงาน — อุปกรณ์ที่ไม่ได้
+                // override เอง (ใช้ตารางเวลาของฟาร์มล้วนๆ) เดิมไม่โชว์อะไรเลย
+                // เพราะ field ตารางเวลาอยู่ที่ device_registry ไม่ใช่ตัว
+                // อุปกรณ์เอง ทำให้ดูเหมือนตั้งเวลาทั้งฟาร์มไปแล้ว "ไม่มีอะไร
+                // เกิดขึ้น" ทั้งที่จริงๆทำงานถูกต้องอยู่เบื้องหลัง
+                _ScheduleStatusLabel(data: data),
                 const SizedBox(height: 14),
                 Container(
                   padding:
@@ -505,13 +470,7 @@ class DeviceCardState extends State<DeviceCard>
                     // เป็นการตั้งค่าเฉพาะอุปกรณ์นี้ — ต่างจาก "ลบอุปกรณ์" ที่ย้าย
                     // ไปรวมอยู่ในเมนูรวมของหน้าหลักแทนแล้ว)
                     Expanded(
-                      child: ActionButton(
-                        icon: Icons.schedule,
-                        label: "ตั้งเวลา",
-                        showBadge: data['scheduleEnabled'] == true,
-                        onTap: () =>
-                            openDeviceScheduleDialog(context, nanoId, data),
-                      ),
+                      child: _ScheduleActionButton(nanoId: nanoId, data: data),
                     ),
                   ],
                 ),
@@ -526,5 +485,145 @@ class DeviceCardState extends State<DeviceCard>
       opacity: _fadeAnim,
       child: SlideTransition(position: _slideAnim, child: card),
     );
+  }
+}
+
+// หาว่า "ตารางเวลาที่มีผลจริง" ของอุปกรณ์นี้ตอนนี้คืออะไร (หรือ null ถ้าไม่มี
+// เลย) — ใช้ร่วมกันทั้งป้ายบอกตารางเวลาบนการ์ด (_ScheduleStatusLabel) และจุด
+// สีเขียวบนปุ่ม "ตั้งเวลา" (_ScheduleActionButton) กันตรรกะสองที่ไม่ตรงกัน
+// เหมือนที่เคยเกิดมาก่อน (ป้ายเช็ค override+ฟาร์มแล้ว แต่จุดเขียวเช็คแค่ field
+// ของอุปกรณ์เองอย่างเดียว เลยไม่ตรงกัน)
+Map<String, dynamic>? _resolveEffectiveSchedule(
+  Map<String, dynamic> data,
+  Map<String, dynamic>? groupData,
+) {
+  if (data['scheduleOverride'] == true) {
+    if (data['scheduleEnabled'] != true ||
+        data['scheduleStart'] == null ||
+        data['scheduleEnd'] == null) {
+      return null;
+    }
+    return data;
+  }
+
+  if (groupData == null ||
+      groupData['scheduleEnabled'] != true ||
+      groupData['scheduleStart'] == null ||
+      groupData['scheduleEnd'] == null) {
+    return null;
+  }
+  return {
+    'desiredAuto': data['desiredAuto'],
+    'Auto': data['Auto'],
+    'scheduleEnabled': groupData['scheduleEnabled'],
+    'scheduleMode': groupData['scheduleMode'],
+    'scheduleStart': groupData['scheduleStart'],
+    'scheduleEnd': groupData['scheduleEnd'],
+    'scheduleExceptEnabled': groupData['scheduleExceptEnabled'],
+    'scheduleExceptStart': groupData['scheduleExceptStart'],
+    'scheduleExceptEnd': groupData['scheduleExceptEnd'],
+  };
+}
+
+// ถ้า override เอง ไม่ต้อง query เพิ่ม (ใช้ field บนตัวอุปกรณ์ตรงๆ) ถ้าไม่ได้
+// override แต่มี groupId ค่อย listen device_registry/{groupId} เพิ่มเพื่อดึง
+// ตารางเวลาของฟาร์มมาคำนวณแทน — คืนค่า null (ผ่าน builder) ถ้าไม่มีตารางเวลา
+// จากที่ไหนเลย ให้ widget ที่ใช้ตัดสินใจเองว่าจะโชว์อะไรตอนไม่มี
+Widget _withEffectiveSchedule(
+  Map<String, dynamic> data,
+  Widget Function(BuildContext context, Map<String, dynamic>? schedule) builder,
+) {
+  if (data['scheduleOverride'] == true) {
+    return Builder(
+      builder: (context) =>
+          builder(context, _resolveEffectiveSchedule(data, null)),
+    );
+  }
+
+  final groupId = data['groupId'] as String?;
+  if (groupId == null) {
+    return Builder(builder: (context) => builder(context, null));
+  }
+
+  return StreamBuilder<DocumentSnapshot>(
+    stream: FirebaseFirestore.instance
+        .collection('device_registry')
+        .doc(groupId)
+        .snapshots(),
+    builder: (context, snapshot) {
+      final groupData = snapshot.data?.data() as Map<String, dynamic>?;
+      return builder(context, _resolveEffectiveSchedule(data, groupData));
+    },
+  );
+}
+
+// แสดงป้ายตารางเวลาที่กำลังมีผลจริงกับอุปกรณ์นี้ ไม่ว่าจะมาจากตารางเวลาของ
+// อุปกรณ์เอง (scheduleOverride: true) หรือมาจากตารางเวลาของฟาร์มที่สังกัดอยู่
+// (device_registry) ก็ตาม
+class _ScheduleStatusLabel extends StatelessWidget {
+  final Map<String, dynamic> data;
+
+  const _ScheduleStatusLabel({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    return _withEffectiveSchedule(data, (context, s) {
+      if (s == null) return const SizedBox.shrink();
+
+      final isSuppressed =
+          (s['desiredAuto'] ?? s['Auto'] ?? false) == true && s['Auto'] != true;
+      final isBlockMode = s['scheduleMode'] == 'block';
+      final hasException = s['scheduleExceptEnabled'] == true &&
+          s['scheduleExceptStart'] != null &&
+          s['scheduleExceptEnd'] != null;
+      final label = (isBlockMode
+              ? "ห้ามรด ${s['scheduleStart']}-${s['scheduleEnd']}"
+              : "รดได้ ${s['scheduleStart']}-${s['scheduleEnd']}") +
+          (hasException
+              ? " (ยกเว้น ${s['scheduleExceptStart']}-${s['scheduleExceptEnd']})"
+              : "");
+      final color = isSuppressed
+          ? Colors.orange
+          : Theme.of(context).textTheme.bodySmall?.color;
+
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Row(
+          children: [
+            Icon(Icons.schedule, size: 14, color: color),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                isSuppressed ? "$label (Auto หยุดชั่วคราวตอนนี้)" : label,
+                style: TextStyle(fontSize: 11, color: color),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+}
+
+// ปุ่ม "ตั้งเวลา" พร้อมจุดสีเขียวบอกว่ามีตารางเวลากำลังใช้งานอยู่จริงมั้ย —
+// ใช้ตรรกะเดียวกับ _ScheduleStatusLabel เป๊ะๆ (เดิมเช็คแค่ field ของอุปกรณ์
+// เอง ทำให้อุปกรณ์ที่ใช้ตารางเวลาของฟาร์มไม่ขึ้นจุดเขียว และอุปกรณ์ที่เคย
+// override แล้วปิดสวิตช์ไปยังขึ้นจุดเขียวค้างจาก field เก่าที่ไม่ได้ล้าง)
+class _ScheduleActionButton extends StatelessWidget {
+  final String nanoId;
+  final Map<String, dynamic> data;
+
+  const _ScheduleActionButton({required this.nanoId, required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    return _withEffectiveSchedule(data, (context, s) {
+      return ActionButton(
+        icon: Icons.schedule,
+        label: "ตั้งเวลา",
+        showBadge: s != null,
+        onTap: () => openDeviceScheduleDialog(context, nanoId, data),
+      );
+    });
   }
 }

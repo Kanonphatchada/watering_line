@@ -40,6 +40,9 @@ class ControlChip extends StatelessWidget {
           Expanded(
             child: Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              softWrap: false,
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
