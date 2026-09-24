@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
+import '../../../shared/web/web_utils.dart';
 
 // ค้นหาชื่อสถานที่ (อำเภอ/จังหวัด/ชื่อเมือง) แล้วแปลงเป็นพิกัดให้เอง — ผู้ใช้
 // ส่วนใหญ่ไม่รู้ละติจูด/ลองจิจูดของตัวเองเลย ใช้ Open-Meteo Geocoding API
@@ -136,6 +137,25 @@ Future<void> showRainSkipEditor(BuildContext context, String groupId) async {
           });
         }
 
+        Future<void> handleUseCurrentLocation() async {
+          final pos = await getCurrentPosition();
+          if (pos == null) {
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  "ขอตำแหน่งไม่สำเร็จ (ต้องอนุญาตสิทธิ์ตำแหน่งในเบราว์เซอร์)",
+                ),
+              ),
+            );
+            return;
+          }
+          setDialogState(() {
+            farmLatController.text = '${pos['lat']}';
+            farmLonController.text = '${pos['lon']}';
+          });
+        }
+
         return AlertDialog(
           title: const Text("พยากรณ์อากาศ"),
           content: SizedBox(
@@ -182,6 +202,15 @@ Future<void> showRainSkipEditor(BuildContext context, String groupId) async {
                           onPressed: handlePlaceSearch,
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 4),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: handleUseCurrentLocation,
+                        icon: const Icon(Icons.my_location, size: 18),
+                        label: const Text("ใช้ตำแหน่งปัจจุบัน"),
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Text(
