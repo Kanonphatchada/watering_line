@@ -6,6 +6,7 @@ import 'schedule_overview_page.dart';
 import '../../profile/pages/profile_page.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../services/farm_schedule.dart';
+import '../services/rain_skip.dart';
 import '../services/remove_device.dart';
 import '../widgets/device_card.dart';
 import '../widgets/home_summary_widgets.dart';
@@ -362,6 +363,15 @@ class _HomePageState extends State<HomePage> {
                                   ScheduleOverviewPage(docs: menuDocs),
                             ),
                           );
+                        },
+                      ),
+                      ListTile(
+                        contentPadding: const EdgeInsets.only(left: 32),
+                        leading: const Icon(Icons.cloud_outlined, size: 20),
+                        title: const Text("พยากรณ์อากาศ"),
+                        onTap: () {
+                          Navigator.pop(drawerContext);
+                          openRainSkipDialog(context, menuDocs);
                         },
                       ),
                     ],
