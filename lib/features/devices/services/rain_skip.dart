@@ -73,6 +73,7 @@ Future<void> showRainSkipEditor(BuildContext context, String groupId) async {
   final registryData = registryDoc.data() ?? {};
 
   bool rainSkipEnabled = registryData['rainSkipEnabled'] == true;
+  String? placeError;
   final placeController = TextEditingController();
   final farmLatController = TextEditingController(
     text: registryData['farmLat'] != null ? '${registryData['farmLat']}' : '',
@@ -94,22 +95,15 @@ Future<void> showRainSkipEditor(BuildContext context, String groupId) async {
           List<Map<String, dynamic>> results;
           try {
             results = await _searchPlaces(query);
-          } catch (err) {
-            if (!context.mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text("ค้นหาไม่สำเร็จ: $err")),
-            );
+          } catch (_) {
+            setDialogState(() => placeError = "ค้นหาไม่สำเร็จ ลองอีกครั้ง");
             return;
           }
           if (results.isEmpty) {
-            if (!context.mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text("ไม่พบสถานที่ที่ค้นหา ลองพิมพ์ชื่ออื่น"),
-              ),
-            );
+            setDialogState(() => placeError = "ไม่พบสถานที่นี้");
             return;
           }
+          setDialogState(() => placeError = null);
 
           if (!context.mounted) return;
           final picked = await showDialog<Map<String, dynamic>>(
@@ -173,54 +167,44 @@ Future<void> showRainSkipEditor(BuildContext context, String groupId) async {
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text("ข้ามรดน้ำถ้าฝนจะตก"),
-                    subtitle: const Text(
-                      "เช็คพยากรณ์ฝน 3 ชม.ข้างหน้าก่อนรดน้ำอัตโนมัติทุกรอบ "
-                      "ถ้าโอกาสฝนสูงจะข้ามรอบนั้นไป (ไม่ข้าม 2 รอบติดกัน)",
-                    ),
+                    subtitle: const Text("เช็คฝน 3 ชม.ข้างหน้าก่อนรดน้ำ"),
                     value: rainSkipEnabled,
                     onChanged: (v) => setDialogState(() => rainSkipEnabled = v),
                   ),
                   if (rainSkipEnabled) ...[
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 8),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
                           child: TextField(
                             controller: placeController,
-                            decoration: const InputDecoration(
-                              labelText: "ค้นหาชื่อสถานที่ (อำเภอ/จังหวัด)",
+                            decoration: InputDecoration(
+                              labelText: "ค้นหาสถานที่ (อำเภอ/จังหวัด)",
                               isDense: true,
+                              errorText: placeError,
                             ),
+                            onChanged: (_) {
+                              if (placeError != null) {
+                                setDialogState(() => placeError = null);
+                              }
+                            },
                             onSubmitted: (_) => handlePlaceSearch(),
                           ),
                         ),
-                        const SizedBox(width: 4),
                         IconButton(
                           icon: const Icon(Icons.search),
                           tooltip: "ค้นหา",
                           onPressed: handlePlaceSearch,
                         ),
+                        IconButton(
+                          icon: const Icon(Icons.my_location),
+                          tooltip: "ใช้ตำแหน่งปัจจุบัน",
+                          onPressed: handleUseCurrentLocation,
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton.icon(
-                        onPressed: handleUseCurrentLocation,
-                        icon: const Icon(Icons.my_location, size: 18),
-                        label: const Text("ใช้ตำแหน่งปัจจุบัน"),
-                      ),
-                    ),
                     const SizedBox(height: 8),
-                    Text(
-                      "หรือกรอกพิกัดเอง:",
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).textTheme.bodySmall?.color,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
                     TextField(
                       controller: farmLatController,
                       keyboardType: const TextInputType.numberWithOptions(
@@ -228,7 +212,7 @@ Future<void> showRainSkipEditor(BuildContext context, String groupId) async {
                         signed: true,
                       ),
                       decoration: const InputDecoration(
-                        labelText: "ละติจูดฟาร์ม (Latitude)",
+                        labelText: "ละติจูด",
                         isDense: true,
                       ),
                     ),
@@ -240,7 +224,7 @@ Future<void> showRainSkipEditor(BuildContext context, String groupId) async {
                         signed: true,
                       ),
                       decoration: const InputDecoration(
-                        labelText: "ลองจิจูดฟาร์ม (Longitude)",
+                        labelText: "ลองจิจูด",
                         isDense: true,
                       ),
                     ),
