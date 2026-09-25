@@ -73,14 +73,6 @@ Future<void> showFarmScheduleEditor(
       parseHHmm(registryData['scheduleExceptEnd'] as String?) ??
           const TimeOfDay(hour: 14, minute: 0);
 
-  bool rainSkipEnabled = registryData['rainSkipEnabled'] == true;
-  final farmLatController = TextEditingController(
-    text: registryData['farmLat'] != null ? '${registryData['farmLat']}' : '',
-  );
-  final farmLonController = TextEditingController(
-    text: registryData['farmLon'] != null ? '${registryData['farmLon']}' : '',
-  );
-
   final deviceCount = docs
       .where((d) => (d.data() as Map<String, dynamic>)['groupId'] == groupId)
       .length;
@@ -204,43 +196,6 @@ Future<void> showFarmScheduleEditor(
                     ),
                   ],
                 ],
-                const Divider(height: 24),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text("ข้ามรดน้ำถ้าฝนจะตก (พยากรณ์อากาศ)"),
-                  subtitle: const Text(
-                    "เช็คพยากรณ์ฝน 3 ชม.ข้างหน้าก่อนรดน้ำอัตโนมัติทุกรอบ "
-                    "ถ้าโอกาสฝนสูงจะข้ามรอบนั้นไป (ไม่ข้าม 2 รอบติดกัน)",
-                  ),
-                  value: rainSkipEnabled,
-                  onChanged: (v) => setDialogState(() => rainSkipEnabled = v),
-                ),
-                if (rainSkipEnabled) ...[
-                  const SizedBox(height: 4),
-                  TextField(
-                    controller: farmLatController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                      signed: true,
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: "ละติจูดฟาร์ม (Latitude)",
-                      isDense: true,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: farmLonController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                      signed: true,
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: "ลองจิจูดฟาร์ม (Longitude)",
-                      isDense: true,
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
@@ -259,33 +214,7 @@ Future<void> showFarmScheduleEditor(
     ),
   );
 
-  // ปล่อยให้เฟรมปัจจุบัน (ตอน dialog เพิ่งปิด) render เสร็จก่อนค่อย dispose —
-  // dispose ทันทีระหว่างที่ dialog กำลัง animate ปิดจะชน exception (ดูจุดที่
-  // เจอบั๊กเดียวกันใน pickerQueryController)
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    farmLatController.dispose();
-    farmLonController.dispose();
-  });
-
   if (saved != true) return;
-
-  double? farmLat;
-  double? farmLon;
-  if (rainSkipEnabled) {
-    farmLat = double.tryParse(farmLatController.text.trim());
-    farmLon = double.tryParse(farmLonController.text.trim());
-    final validLat = farmLat != null && farmLat >= -90 && farmLat <= 90;
-    final validLon = farmLon != null && farmLon >= -180 && farmLon <= 180;
-    if (!validLat || !validLon) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("พิกัดฟาร์มไม่ถูกต้อง กรุณาใส่ละติจูด/ลองจิจูดให้ครบ"),
-        ),
-      );
-      return;
-    }
-  }
 
   final startHHmm = formatHHmm(start);
   final endHHmm = formatHHmm(end);
@@ -304,9 +233,6 @@ Future<void> showFarmScheduleEditor(
       'scheduleExceptEnabled': exceptEnabled,
       'scheduleExceptStart': exceptStartHHmm,
       'scheduleExceptEnd': exceptEndHHmm,
-      'rainSkipEnabled': rainSkipEnabled,
-      if (rainSkipEnabled) 'farmLat': farmLat,
-      if (rainSkipEnabled) 'farmLon': farmLon,
     });
 
     // อัปเดต Auto ทันทีให้ทุกอุปกรณ์ในกลุ่มที่ "ไม่ได้" override ไว้เอง —
