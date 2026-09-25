@@ -1,7 +1,5 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:fl_chart/fl_chart.dart';
 import 'package:shimmer/shimmer.dart';
 import '../services/rain_skip.dart';
 
@@ -84,90 +82,16 @@ class SummaryBar extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: _MoistureKpiCard(docs: docs, avgMoisture: avgMoisture),
+            child: _KpiCard(
+              icon: Icons.water_drop,
+              iconColor: const Color(0xFF1E88E5),
+              label: "ความชื้นเฉลี่ย",
+              numericValue: avgMoisture,
+              format: (v) => v.toStringAsFixed(1),
+            ),
           ),
         ],
       ),
-    );
-  }
-}
-
-// การ์ดความชื้นเฉลี่ย มีกราฟเส้นเล็ก (sparkline) ประกอบ — ดึงจากค่าความชื้น
-// จริงใน Logs ของแต่ละอุปกรณ์ (fan-out ทีละตัวแล้วรวมเรียงตามเวลา) ไม่ใช่
-// เส้นสุ่ม/ข้อมูลสมมติ ต่างจาก 2 การ์ดก่อนหน้าที่ไม่มีประวัติให้ลากเส้นได้จริง
-// เลยไม่ใส่กราฟให้ (ใส่แล้วจะเป็นข้อมูลปลอม)
-class _MoistureKpiCard extends StatefulWidget {
-  final List<QueryDocumentSnapshot> docs;
-  final double avgMoisture;
-
-  const _MoistureKpiCard({required this.docs, required this.avgMoisture});
-
-  @override
-  State<_MoistureKpiCard> createState() => _MoistureKpiCardState();
-}
-
-class _MoistureKpiCardState extends State<_MoistureKpiCard> {
-  late Future<List<double>> _future;
-  List<String> _lastIds = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _lastIds = widget.docs.map((d) => d.id).toList()..sort();
-    _future = _fetch();
-  }
-
-  @override
-  void didUpdateWidget(covariant _MoistureKpiCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final newIds = widget.docs.map((d) => d.id).toList()..sort();
-    if (!listEquals(_lastIds, newIds)) {
-      _lastIds = newIds;
-      _future = _fetch();
-    }
-  }
-
-  Future<List<double>> _fetch() async {
-    if (widget.docs.isEmpty) return [];
-
-    final results = await Future.wait(
-      widget.docs.map((d) async {
-        final snap = await d.reference
-            .collection('Logs')
-            .orderBy('timestamp')
-            .limitToLast(20)
-            .get();
-        return [
-          for (final l in snap.docs)
-            if (l.data()['moisture'] is num)
-              (l.data()['moisture'] as num).toDouble(),
-        ];
-      }),
-    );
-
-    // รวมค่าความชื้นล่าสุดของทุกอุปกรณ์เรียงต่อกันแบบหยาบๆ (ไม่ได้ bucket
-    // ตามเวลาจริงจัง) แค่พอให้เห็นแนวโน้มคร่าวๆ บนการ์ดเล็กๆ
-    final all = results.expand((x) => x).toList();
-    if (all.length > 24) {
-      return all.sublist(all.length - 24);
-    }
-    return all;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<List<double>>(
-      future: _future,
-      builder: (context, snapshot) {
-        return _KpiCard(
-          icon: Icons.water_drop,
-          iconColor: const Color(0xFF1E88E5),
-          label: "ความชื้นเฉลี่ย",
-          numericValue: widget.avgMoisture,
-          format: (v) => v.toStringAsFixed(1),
-          sparkline: snapshot.data,
-        );
-      },
     );
   }
 }
@@ -293,10 +217,6 @@ class _KpiCard extends StatelessWidget {
   final String label;
   final double numericValue;
   final String Function(double) format;
-  // กราฟเส้นเล็ก (sparkline) เสริม — ใส่เฉพาะตอนมีประวัติจริงให้ลาก (ดู
-  // _MoistureKpiCard) การ์ดอื่นที่ไม่มีประวัติเก็บไว้จะไม่มีกราฟ ไม่ใช้เส้น
-  // สุ่ม/ข้อมูลสมมติมาใส่แทน
-  final List<double>? sparkline;
 
   const _KpiCard({
     required this.icon,
@@ -304,7 +224,6 @@ class _KpiCard extends StatelessWidget {
     required this.label,
     required this.numericValue,
     required this.format,
-    this.sparkline,
   });
 
   @override
@@ -362,50 +281,8 @@ class _KpiCard extends StatelessWidget {
                 );
               },
             ),
-            const SizedBox(height: 8),
-            SizedBox(
-              height: 32,
-              child: sparkline != null && sparkline!.length >= 2
-                  ? _Sparkline(values: sparkline!, color: iconColor)
-                  : null,
-            ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _Sparkline extends StatelessWidget {
-  final List<double> values;
-  final Color color;
-
-  const _Sparkline({required this.values, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return LineChart(
-      LineChartData(
-        gridData: const FlGridData(show: false),
-        titlesData: const FlTitlesData(show: false),
-        borderData: FlBorderData(show: false),
-        lineTouchData: const LineTouchData(enabled: false),
-        lineBarsData: [
-          LineChartBarData(
-            spots: [
-              for (var i = 0; i < values.length; i++)
-                FlSpot(i.toDouble(), values[i]),
-            ],
-            isCurved: true,
-            color: color,
-            barWidth: 2,
-            dotData: const FlDotData(show: false),
-            belowBarData: BarAreaData(
-              show: true,
-              color: color.withValues(alpha: 0.15),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -416,19 +293,23 @@ class _Sparkline extends StatelessWidget {
 class FleetHealthCard extends StatelessWidget {
   final int onlineCount;
   final int totalCount;
+  final int alertCount;
   final double avgMoisture;
 
   const FleetHealthCard({
     super.key,
     required this.onlineCount,
     required this.totalCount,
+    required this.alertCount,
     required this.avgMoisture,
   });
 
   @override
   Widget build(BuildContext context) {
     final onlineRatio = totalCount == 0 ? 0.0 : onlineCount / totalCount;
-    final isHealthy = onlineRatio == 1.0;
+    final noAlertCount = totalCount - alertCount;
+    final noAlertRatio = totalCount == 0 ? 0.0 : noAlertCount / totalCount;
+    final isHealthy = onlineRatio == 1.0 && alertCount == 0;
 
     return Card(
       margin: EdgeInsets.zero,
@@ -478,6 +359,13 @@ class FleetHealthCard extends StatelessWidget {
               valueText: "${avgMoisture.toStringAsFixed(0)}%",
               ratio: (avgMoisture / 100).clamp(0, 1),
               color: const Color(0xFF1E88E5),
+            ),
+            const SizedBox(height: 16),
+            _HealthBar(
+              label: "อุปกรณ์ไม่มีแจ้งเตือน",
+              valueText: "$noAlertCount/$totalCount",
+              ratio: noAlertRatio,
+              color: alertCount == 0 ? const Color(0xFF2E7D32) : Colors.orange,
             ),
           ],
         ),
@@ -556,6 +444,17 @@ class _SegmentedBar extends StatelessWidget {
                           alpha: 0.2,
                         ),
                 borderRadius: BorderRadius.circular(3),
+                // ทำให้ช่องที่ติดสว่าง "เรืองแสง" (glow) แทนที่จะแบนราบ —
+                // เฉพาะช่องที่ fill แล้วเท่านั้น ช่องว่างไม่มี glow
+                boxShadow: i < filled
+                    ? [
+                        BoxShadow(
+                          color: color.withValues(alpha: 0.7),
+                          blurRadius: 6,
+                          spreadRadius: 0.5,
+                        ),
+                      ]
+                    : null,
               ),
             ),
           ),

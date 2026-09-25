@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 // แถบไอคอนถาวรด้านซ้าย แทนที่เมนู hamburger + drawer เดิม — เหมาะกับหน้าจอ
 // กว้างแบบเว็บ เข้าถึงเมนูหลักได้ทันทีโดยไม่ต้องกดเปิด/ปิดอีกต่อไป
-class SideNavRail extends StatelessWidget {
+class SideNavRail extends StatefulWidget {
   final VoidCallback onAddDevice;
   final VoidCallback onFarmSchedule;
   final VoidCallback onScheduleOverview;
@@ -21,54 +21,92 @@ class SideNavRail extends StatelessWidget {
   });
 
   @override
+  State<SideNavRail> createState() => _SideNavRailState();
+}
+
+class _SideNavRailState extends State<SideNavRail> {
+  // แผงเมนูย่อย "ตารางเวลา" เด้งออกมาเป็นแท็บใหญ่ข้างแถบไอคอน แทนเมนูเล็กๆ
+  // แบบ hover เดิม (PopupMenuButton) — เปิด/ปิดด้วย state ตรงๆ ไม่ใช้ overlay
+  bool _scheduleOpen = false;
+
+  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final railColor =
+        isDark ? const Color(0xFF0A0B0C) : scheme.surfaceContainerHighest;
 
-    return Container(
-      width: 72,
-      color: isDark ? const Color(0xFF0A0B0C) : scheme.surfaceContainerHighest,
-      child: SafeArea(
-        child: Column(
-          children: [
-            const SizedBox(height: 16),
-            Icon(Icons.eco_rounded, color: scheme.primary, size: 28),
-            const SizedBox(height: 24),
-            _NavIcon(
-              icon: Icons.grid_view_rounded,
-              tooltip: "หน้าหลัก",
-              active: true,
-              onTap: () {},
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          width: 72,
+          color: railColor,
+          child: SafeArea(
+            child: Column(
+              children: [
+                const SizedBox(height: 16),
+                Icon(Icons.eco_rounded, color: scheme.primary, size: 28),
+                const SizedBox(height: 24),
+                _NavIcon(
+                  icon: Icons.grid_view_rounded,
+                  tooltip: "หน้าหลัก",
+                  active: true,
+                  onTap: () => setState(() => _scheduleOpen = false),
+                ),
+                const SizedBox(height: 4),
+                _NavIcon(
+                  icon: Icons.add_circle_outline_rounded,
+                  tooltip: "เพิ่มอุปกรณ์",
+                  onTap: widget.onAddDevice,
+                ),
+                const SizedBox(height: 4),
+                _NavIcon(
+                  icon: Icons.schedule,
+                  tooltip: "ตารางเวลา",
+                  active: _scheduleOpen,
+                  onTap: () => setState(() => _scheduleOpen = !_scheduleOpen),
+                ),
+                const SizedBox(height: 4),
+                _NavIcon(
+                  icon: Icons.delete_outline,
+                  tooltip: "ลบอุปกรณ์",
+                  onTap: widget.onRemoveDevice,
+                  color: Colors.red,
+                ),
+                const Spacer(),
+                _NavIcon(
+                  icon: Icons.person_outline_rounded,
+                  tooltip: "โปรไฟล์",
+                  onTap: widget.onProfile,
+                ),
+                const SizedBox(height: 16),
+              ],
             ),
-            const SizedBox(height: 4),
-            _NavIcon(
-              icon: Icons.add_circle_outline_rounded,
-              tooltip: "เพิ่มอุปกรณ์",
-              onTap: onAddDevice,
-            ),
-            const SizedBox(height: 4),
-            _ScheduleMenuIcon(
-              onFarmSchedule: onFarmSchedule,
-              onScheduleOverview: onScheduleOverview,
-              onWeather: onWeather,
-            ),
-            const SizedBox(height: 4),
-            _NavIcon(
-              icon: Icons.delete_outline,
-              tooltip: "ลบอุปกรณ์",
-              onTap: onRemoveDevice,
-              color: Colors.red,
-            ),
-            const Spacer(),
-            _NavIcon(
-              icon: Icons.person_outline_rounded,
-              tooltip: "โปรไฟล์",
-              onTap: onProfile,
-            ),
-            const SizedBox(height: 16),
-          ],
+          ),
         ),
-      ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          child: _scheduleOpen
+              ? _SchedulePanel(
+                  onClose: () => setState(() => _scheduleOpen = false),
+                  onFarmSchedule: () {
+                    setState(() => _scheduleOpen = false);
+                    widget.onFarmSchedule();
+                  },
+                  onScheduleOverview: () {
+                    setState(() => _scheduleOpen = false);
+                    widget.onScheduleOverview();
+                  },
+                  onWeather: () {
+                    setState(() => _scheduleOpen = false);
+                    widget.onWeather();
+                  },
+                )
+              : const SizedBox(width: 0),
+        ),
+      ],
     );
   }
 }
@@ -116,15 +154,16 @@ class _NavIcon extends StatelessWidget {
   }
 }
 
-// ไอคอน "ตารางเวลา" กดแล้วขึ้นเมนูย่อย 3 อัน (ตั้งเวลาทั้งฟาร์ม/สรุปตาราง
-// เวลา/พยากรณ์อากาศ) แทนการพาไปหน้าใดหน้าหนึ่งตรงๆ — ใช้ PopupMenuButton
-// แทนแถบ Drawer เดิมที่ไม่มีให้ใช้แล้วในโครงสร้างใหม่นี้
-class _ScheduleMenuIcon extends StatelessWidget {
+// แผงตารางเวลา — แท็บใหญ่ที่เด้งออกมาข้างแถบไอคอนถาวร (ไม่ใช่เมนู hover
+// เล็กๆ แบบเดิม) แสดงหัวข้อ + รายการ 3 อันเต็มความกว้าง กดปิดได้ด้วยปุ่ม X
+class _SchedulePanel extends StatelessWidget {
+  final VoidCallback onClose;
   final VoidCallback onFarmSchedule;
   final VoidCallback onScheduleOverview;
   final VoidCallback onWeather;
 
-  const _ScheduleMenuIcon({
+  const _SchedulePanel({
+    required this.onClose,
     required this.onFarmSchedule,
     required this.onScheduleOverview,
     required this.onWeather,
@@ -132,49 +171,52 @@ class _ScheduleMenuIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Tooltip(
-      message: "ตารางเวลา",
-      child: PopupMenuButton<VoidCallback>(
-        tooltip: '',
-        position: PopupMenuPosition.under,
-        onSelected: (callback) => callback(),
-        itemBuilder: (context) => [
-          PopupMenuItem(
-            value: onFarmSchedule,
-            child: const Row(
-              children: [
-                Icon(Icons.schedule, size: 20),
-                SizedBox(width: 12),
-                Text("ตั้งเวลาทั้งฟาร์ม"),
-              ],
+    return Container(
+      width: 240,
+      color: isDark ? const Color(0xFF141517) : Theme.of(context).cardColor,
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      "ตารางเวลา",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 20),
+                    onPressed: onClose,
+                  ),
+                ],
+              ),
             ),
-          ),
-          PopupMenuItem(
-            value: onScheduleOverview,
-            child: const Row(
-              children: [
-                Icon(Icons.fact_check_outlined, size: 20),
-                SizedBox(width: 12),
-                Text("สรุปตารางเวลา"),
-              ],
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.schedule),
+              title: const Text("ตั้งเวลาทั้งฟาร์ม"),
+              onTap: onFarmSchedule,
             ),
-          ),
-          PopupMenuItem(
-            value: onWeather,
-            child: const Row(
-              children: [
-                Icon(Icons.cloud_outlined, size: 20),
-                SizedBox(width: 12),
-                Text("พยากรณ์อากาศ"),
-              ],
+            ListTile(
+              leading: const Icon(Icons.fact_check_outlined),
+              title: const Text("สรุปตารางเวลา"),
+              onTap: onScheduleOverview,
             ),
-          ),
-        ],
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Icon(Icons.schedule, color: scheme.onSurface, size: 22),
+            ListTile(
+              leading: const Icon(Icons.cloud_outlined),
+              title: const Text("พยากรณ์อากาศ"),
+              onTap: onWeather,
+            ),
+          ],
         ),
       ),
     );

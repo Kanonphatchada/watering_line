@@ -67,7 +67,7 @@ class _RecentActivityCardState extends State<RecentActivityCard> {
         final snap = await d.reference
             .collection('Incidents')
             .orderBy('startedAt', descending: true)
-            .limit(5)
+            .limit(8)
             .get();
         return snap.docs.map((i) => _ActivityItem(d.id, i.data())).toList();
       }),
@@ -80,7 +80,7 @@ class _RecentActivityCardState extends State<RecentActivityCard> {
         return bt.compareTo(at);
       });
 
-    return all.take(6).toList();
+    return all.take(20).toList();
   }
 
   @override
@@ -128,10 +128,19 @@ class _RecentActivityCardState extends State<RecentActivityCard> {
                   );
                 }
 
-                return Column(
-                  children: [
-                    for (final item in items) _ActivityRow(item: item),
-                  ],
+                // จำกัดความสูงไว้แล้วให้เลื่อนดูเองข้างในการ์ด แทนที่จะ
+                // ปล่อยให้การ์ดยืดสูงขึ้นเรื่อยๆ ตามจำนวนเหตุการณ์
+                return SizedBox(
+                  height: 260,
+                  child: Scrollbar(
+                    thumbVisibility: true,
+                    child: ListView.builder(
+                      padding: EdgeInsets.zero,
+                      itemCount: items.length,
+                      itemBuilder: (context, index) =>
+                          _ActivityRow(item: items[index]),
+                    ),
+                  ),
                 );
               },
             ),
