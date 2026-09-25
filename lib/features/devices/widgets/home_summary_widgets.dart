@@ -42,14 +42,12 @@ class HomeSkeleton extends StatelessWidget {
 class SummaryBar extends StatelessWidget {
   final List<QueryDocumentSnapshot> docs;
   final int totalDevices;
-  final int alertCount;
   final double avgMoisture;
 
   const SummaryBar({
     super.key,
     required this.docs,
     required this.totalDevices,
-    required this.alertCount,
     required this.avgMoisture,
   });
 
@@ -71,15 +69,7 @@ class SummaryBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          Expanded(
-            child: _KpiCard(
-              icon: Icons.warning_amber_rounded,
-              iconColor: alertCount > 0 ? Colors.red : okColor,
-              label: "แจ้งเตือน",
-              numericValue: alertCount.toDouble(),
-              format: (v) => v.round().toString(),
-            ),
-          ),
+          Expanded(child: WeatherForecastCard(docs: docs)),
           const SizedBox(width: 10),
           Expanded(
             child: _KpiCard(
@@ -96,9 +86,9 @@ class SummaryBar extends StatelessWidget {
   }
 }
 
-// การ์ดสรุปสถานะพยากรณ์อากาศบนหน้าแดชบอร์ด (dashboard) — อ่านจาก
-// device_registry ของทุกกลุ่ม/ฟาร์มที่อุปกรณ์ผู้ใช้สังกัดอยู่ (ไม่ใช่แค่
-// ฟาร์มเดียว เผื่อผู้ใช้มีหลายฟาร์ม) แตะแล้วเปิดไดอะล็อกตั้งค่าได้เลย
+// การ์ดสรุปสถานะพยากรณ์อากาศ — อยู่ในแถวการ์ดสรุปเดียวกับอุปกรณ์ทั้งหมด/
+// ความชื้นเฉลี่ยแล้ว (แทนที่การ์ดแจ้งเตือนเดิม) อ่านจาก device_registry ของ
+// ทุกกลุ่ม/ฟาร์มที่อุปกรณ์ผู้ใช้สังกัดอยู่ แตะแล้วเปิดไดอะล็อกตั้งค่าได้เลย
 class WeatherForecastCard extends StatelessWidget {
   final List<QueryDocumentSnapshot> docs;
 
@@ -112,7 +102,14 @@ class WeatherForecastCard extends StatelessWidget {
         .toSet()
         .toList();
 
-    if (groupIds.isEmpty) return const SizedBox.shrink();
+    if (groupIds.isEmpty) {
+      return _WeatherKpiCard(
+        icon: Icons.cloud_outlined,
+        color: Theme.of(context).colorScheme.outline,
+        status: "ไม่พบฟาร์ม",
+        onTap: () => openRainSkipDialog(context, docs),
+      );
+    }
 
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -130,14 +127,12 @@ class WeatherForecastCard extends StatelessWidget {
 
         late final IconData icon;
         late final Color color;
-        late final String title;
-        late final String subtitle;
+        late final String status;
 
         if (enabled.isEmpty) {
           icon = Icons.cloud_outlined;
           color = Theme.of(context).colorScheme.outline;
-          title = "พยากรณ์อากาศ";
-          subtitle = "ยังไม่ได้เปิดใช้งาน แตะเพื่อตั้งค่า";
+          status = "ยังไม่เปิดใช้";
         } else {
           final rainSoon = enabled.any(
             (d) => (d.data() as Map<String, dynamic>)['_rainForecast'] == true,
@@ -145,68 +140,90 @@ class WeatherForecastCard extends StatelessWidget {
           if (rainSoon) {
             icon = Icons.umbrella;
             color = const Color(0xFF1E88E5);
-            title = "ฝนอาจตกเร็วๆนี้";
-            subtitle =
-                "ข้ามรอบรดน้ำอัตโนมัติชั่วคราว (${enabled.length} ฟาร์ม)";
+            status = "ฝนอาจตก";
           } else {
             icon = Icons.wb_sunny_outlined;
             color = const Color(0xFF2E7D32);
-            title = "ไม่มีฝนตอนนี้";
-            subtitle = "รดน้ำตามปกติ (${enabled.length} ฟาร์มเปิดใช้งาน)";
+            status = "ไม่มีฝน";
           }
         }
 
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-          child: Card(
-            margin: EdgeInsets.zero,
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: () => openRainSkipDialog(context, docs),
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: color.withValues(alpha: 0.14),
-                      ),
-                      child: Icon(icon, size: 20, color: color),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            title,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14,
-                            ),
-                          ),
-                          Text(
-                            subtitle,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color:
-                                  Theme.of(context).textTheme.bodySmall?.color,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Icon(Icons.chevron_right, size: 20),
-                  ],
-                ),
-              ),
-            ),
-          ),
+        return _WeatherKpiCard(
+          icon: icon,
+          color: color,
+          status: status,
+          onTap: () => openRainSkipDialog(context, docs),
         );
       },
+    );
+  }
+}
+
+class _WeatherKpiCard extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String status;
+  final VoidCallback onTap;
+
+  const _WeatherKpiCard({
+    required this.icon,
+    required this.color,
+    required this.status,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [color.withValues(alpha: 0.14), Colors.transparent],
+            ),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: color.withValues(alpha: 0.16),
+                ),
+                child: Icon(icon, size: 18, color: color),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                "พยากรณ์อากาศ",
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).textTheme.bodySmall?.color,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                status,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 22,
+                  height: 1,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

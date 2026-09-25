@@ -201,10 +201,8 @@ class _HomePageState extends State<HomePage> {
                     SummaryBar(
                       docs: docs,
                       totalDevices: docs.length,
-                      alertCount: alertCount,
                       avgMoisture: avgMoisture,
                     ),
-                    WeatherForecastCard(docs: docs),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
                       child: LayoutBuilder(
