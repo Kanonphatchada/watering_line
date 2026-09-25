@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../main.dart' show themeModeNotifier, toggleThemeMode;
 
 // แถบไอคอนถาวรด้านซ้าย แทนที่เมนู hamburger + drawer เดิม — เหมาะกับหน้าจอ
 // กว้างแบบเว็บ เข้าถึงเมนูหลักได้ทันทีโดยไม่ต้องกดเปิด/ปิดอีกต่อไป
@@ -75,6 +76,20 @@ class _SideNavRailState extends State<SideNavRail> {
                   color: Colors.red,
                 ),
                 const Spacer(),
+                ValueListenableBuilder<ThemeMode>(
+                  valueListenable: themeModeNotifier,
+                  builder: (context, mode, _) {
+                    final nowDark = mode == ThemeMode.dark;
+                    return _NavIcon(
+                      icon: nowDark
+                          ? Icons.light_mode_outlined
+                          : Icons.dark_mode_outlined,
+                      tooltip: nowDark ? "โหมดสว่าง" : "โหมดมืด",
+                      onTap: toggleThemeMode,
+                    );
+                  },
+                ),
+                const SizedBox(height: 4),
                 _NavIcon(
                   icon: Icons.person_outline_rounded,
                   tooltip: "โปรไฟล์",
