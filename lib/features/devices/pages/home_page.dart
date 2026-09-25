@@ -201,6 +201,7 @@ class _HomePageState extends State<HomePage> {
                     SummaryBar(
                       docs: docs,
                       totalDevices: docs.length,
+                      alertCount: alertCount,
                       avgMoisture: avgMoisture,
                     ),
                     Padding(

@@ -42,12 +42,14 @@ class HomeSkeleton extends StatelessWidget {
 class SummaryBar extends StatelessWidget {
   final List<QueryDocumentSnapshot> docs;
   final int totalDevices;
+  final int alertCount;
   final double avgMoisture;
 
   const SummaryBar({
     super.key,
     required this.docs,
     required this.totalDevices,
+    required this.alertCount,
     required this.avgMoisture,
   });
 
@@ -78,6 +80,19 @@ class SummaryBar extends StatelessWidget {
               label: "ความชื้นเฉลี่ย",
               numericValue: avgMoisture,
               format: (v) => v.toStringAsFixed(1),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _KpiCard(
+              icon: Icons.warning_amber_rounded,
+              // ไม่ใช้เขียวตอนไม่มีแจ้งเตือน กันซ้ำกับสีการ์ด "อุปกรณ์ทั้งหมด"
+              iconColor: alertCount > 0
+                  ? Colors.red
+                  : Theme.of(context).colorScheme.outline,
+              label: "แจ้งเตือน",
+              numericValue: alertCount.toDouble(),
+              format: (v) => v.round().toString(),
             ),
           ),
         ],
@@ -125,6 +140,10 @@ class WeatherForecastCard extends StatelessWidget {
             )
             .toList();
 
+        // สีเดียวคงที่สำหรับการ์ดนี้ (ไม่ไปซ้ำกับเขียวของ "อุปกรณ์ทั้งหมด"
+        // หรือฟ้าของ "ความชื้นเฉลี่ย") เปลี่ยนแค่ไอคอนตามสถานะ ไม่เปลี่ยนสี
+        const weatherColor = Color(0xFF00897B); // teal
+
         late final IconData icon;
         late final Color color;
         late final String status;
@@ -139,11 +158,11 @@ class WeatherForecastCard extends StatelessWidget {
           );
           if (rainSoon) {
             icon = Icons.umbrella;
-            color = const Color(0xFF1E88E5);
+            color = weatherColor;
             status = "ฝนอาจตก";
           } else {
             icon = Icons.wb_sunny_outlined;
-            color = const Color(0xFF2E7D32);
+            color = weatherColor;
             status = "ไม่มีฝน";
           }
         }
