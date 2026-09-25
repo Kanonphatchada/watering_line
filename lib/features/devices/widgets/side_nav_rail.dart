@@ -85,27 +85,24 @@ class _SideNavRailState extends State<SideNavRail> {
             ),
           ),
         ),
-        AnimatedSize(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-          child: _scheduleOpen
-              ? _SchedulePanel(
-                  onClose: () => setState(() => _scheduleOpen = false),
-                  onFarmSchedule: () {
-                    setState(() => _scheduleOpen = false);
-                    widget.onFarmSchedule();
-                  },
-                  onScheduleOverview: () {
-                    setState(() => _scheduleOpen = false);
-                    widget.onScheduleOverview();
-                  },
-                  onWeather: () {
-                    setState(() => _scheduleOpen = false);
-                    widget.onWeather();
-                  },
-                )
-              : const SizedBox(width: 0),
-        ),
+        // เปิด/ปิดทันทีไม่มีอนิเมชั่น (เคยใช้ AnimatedSize แล้วรู้สึกกระตุก
+        // เพราะหน้านี้ rebuild บ่อยจาก Firestore stream อยู่แล้ว)
+        if (_scheduleOpen)
+          _SchedulePanel(
+            onClose: () => setState(() => _scheduleOpen = false),
+            onFarmSchedule: () {
+              setState(() => _scheduleOpen = false);
+              widget.onFarmSchedule();
+            },
+            onScheduleOverview: () {
+              setState(() => _scheduleOpen = false);
+              widget.onScheduleOverview();
+            },
+            onWeather: () {
+              setState(() => _scheduleOpen = false);
+              widget.onWeather();
+            },
+          ),
       ],
     );
   }

@@ -205,7 +205,7 @@ class _HomePageState extends State<HomePage> {
                       avgMoisture: avgMoisture,
                     ),
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                      padding: const EdgeInsets.fromLTRB(12, 16, 12, 8),
                       child: LayoutBuilder(
                         builder: (context, constraints) {
                           final narrow = constraints.maxWidth < 760;
