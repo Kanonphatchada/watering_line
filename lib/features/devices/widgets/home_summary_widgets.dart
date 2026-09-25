@@ -203,7 +203,7 @@ class _WeatherKpiCard extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [color.withValues(alpha: 0.14), Colors.transparent],
+              colors: [color.withValues(alpha: 0.20), Colors.transparent],
             ),
           ),
           child: Stack(
@@ -214,7 +214,7 @@ class _WeatherKpiCard extends StatelessWidget {
                 child: Icon(
                   icon,
                   size: 100,
-                  color: color.withValues(alpha: 0.08),
+                  color: color.withValues(alpha: 0.11),
                 ),
               ),
               Padding(
@@ -287,7 +287,7 @@ class _KpiCard extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [iconColor.withValues(alpha: 0.14), Colors.transparent],
+            colors: [iconColor.withValues(alpha: 0.20), Colors.transparent],
           ),
         ),
         child: Stack(
@@ -300,7 +300,7 @@ class _KpiCard extends StatelessWidget {
               child: Icon(
                 icon,
                 size: 100,
-                color: iconColor.withValues(alpha: 0.08),
+                color: iconColor.withValues(alpha: 0.11),
               ),
             ),
             Padding(

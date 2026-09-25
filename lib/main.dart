@@ -65,7 +65,9 @@ const _pageTransitionsTheme = PageTransitionsTheme(
 final ThemeData _appTheme = ThemeData(
   useMaterial3: true,
   colorSchemeSeed: const Color(0xFF2E7D32),
-  scaffoldBackgroundColor: const Color(0xFFF3F8F3),
+  // เข้มกว่าขาวของการ์ดพอให้เห็นขอบการ์ดชัดขึ้น (เดิมใกล้ขาวมากจนการ์ดกับ
+  // พื้นหลังกลืนกันไปหมด)
+  scaffoldBackgroundColor: const Color(0xFFE9EEEA),
   textTheme: GoogleFonts.kanitTextTheme(),
   pageTransitionsTheme: _pageTransitionsTheme,
   appBarTheme: AppBarTheme(
@@ -84,12 +86,13 @@ final ThemeData _appTheme = ThemeData(
     ),
   ),
   cardTheme: CardThemeData(
-    elevation: 0,
+    elevation: 1,
+    shadowColor: Colors.black.withValues(alpha: 0.12),
     color: Colors.white,
     margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(18),
-      side: BorderSide(color: Colors.black.withValues(alpha: 0.06)),
+      side: BorderSide(color: Colors.black.withValues(alpha: 0.10)),
     ),
   ),
   elevatedButtonTheme: ElevatedButtonThemeData(
@@ -136,12 +139,14 @@ final ThemeData _appDarkTheme = ThemeData(
     ),
   ),
   cardTheme: CardThemeData(
-    elevation: 0,
-    color: const Color(0xFF17181C),
+    elevation: 1,
+    shadowColor: Colors.black.withValues(alpha: 0.4),
+    // สว่างกว่าพื้นหลัง (0E0F10) มากขึ้นอีกนิด ให้เห็นขอบการ์ดชัดกว่าเดิม
+    color: const Color(0xFF1C1D21),
     margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(18),
-      side: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+      side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
     ),
   ),
   elevatedButtonTheme: ElevatedButtonThemeData(
@@ -152,7 +157,7 @@ final ThemeData _appDarkTheme = ThemeData(
   ),
   inputDecorationTheme: InputDecorationTheme(
     filled: true,
-    fillColor: const Color(0xFF17181C),
+    fillColor: const Color(0xFF1C1D21),
     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
@@ -160,7 +165,7 @@ final ThemeData _appDarkTheme = ThemeData(
     ),
   ),
   dialogTheme: DialogThemeData(
-    backgroundColor: const Color(0xFF17181C),
+    backgroundColor: const Color(0xFF1C1D21),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
   ),
 );
