@@ -157,7 +157,7 @@ class WeatherForecastCard extends StatelessWidget {
             (d) => (d.data() as Map<String, dynamic>)['_rainForecast'] == true,
           );
           if (rainSoon) {
-            icon = Icons.umbrella;
+            icon = Icons.thunderstorm;
             color = weatherColor;
             status = "ฝนอาจตก";
           } else {
