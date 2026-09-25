@@ -15,7 +15,7 @@ const _brandGreen = Color(0xFF1B5E20);
 /// Global theme-mode state so any page (e.g. the toggle button on
 /// HomePage's AppBar) can flip light/dark without prop-drilling.
 final ValueNotifier<ThemeMode> themeModeNotifier =
-    ValueNotifier(ThemeMode.light);
+    ValueNotifier(ThemeMode.dark);
 
 const _themePrefKey = 'isDarkMode';
 
@@ -40,7 +40,7 @@ Future<void> _loadThemeMode() async {
   try {
     final prefs = await SharedPreferences.getInstance()
         .timeout(const Duration(seconds: 2));
-    themeModeNotifier.value = (prefs.getBool(_themePrefKey) ?? false)
+    themeModeNotifier.value = (prefs.getBool(_themePrefKey) ?? true)
         ? ThemeMode.dark
         : ThemeMode.light;
   } catch (e) {
@@ -116,7 +116,7 @@ final ThemeData _appDarkTheme = ThemeData(
   useMaterial3: true,
   brightness: Brightness.dark,
   colorSchemeSeed: const Color(0xFF2E7D32),
-  scaffoldBackgroundColor: const Color(0xFF121212),
+  scaffoldBackgroundColor: const Color(0xFF0E0F10),
   textTheme: GoogleFonts.kanitTextTheme(
       ThemeData(brightness: Brightness.dark).textTheme),
   pageTransitionsTheme: _pageTransitionsTheme,
@@ -137,7 +137,7 @@ final ThemeData _appDarkTheme = ThemeData(
   ),
   cardTheme: CardThemeData(
     elevation: 0,
-    color: const Color(0xFF1E1E1E),
+    color: const Color(0xFF17181C),
     margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(18),
@@ -152,7 +152,7 @@ final ThemeData _appDarkTheme = ThemeData(
   ),
   inputDecorationTheme: InputDecorationTheme(
     filled: true,
-    fillColor: const Color(0xFF1E1E1E),
+    fillColor: const Color(0xFF17181C),
     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
@@ -160,7 +160,7 @@ final ThemeData _appDarkTheme = ThemeData(
     ),
   ),
   dialogTheme: DialogThemeData(
-    backgroundColor: const Color(0xFF1E1E1E),
+    backgroundColor: const Color(0xFF17181C),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
   ),
 );

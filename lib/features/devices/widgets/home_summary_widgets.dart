@@ -229,72 +229,160 @@ class _KpiCard extends StatelessWidget {
     return Card(
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [iconColor.withValues(alpha: 0.14), Colors.transparent],
+          ),
+        ),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // แถบสีบอกตัวตนของการ์ดตั้งแต่แรกเห็น ผูกทั้งการ์ดเข้ากับสีของ
-            // ไอคอน แทนที่จะปล่อยให้ไอคอนลอยเดี่ยวๆ เหนือค่าตัวเลข
-            Container(width: 4, color: iconColor),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 28,
-                          height: 28,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: iconColor.withValues(alpha: 0.14),
-                          ),
-                          child: Icon(icon, size: 16, color: iconColor),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color:
-                                  Theme.of(context).textTheme.bodySmall?.color,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    // ตัวเลขไล่จากค่าเดิมไปค่าใหม่ (นับขึ้น/ลง) แทนกระโดด
-                    // ทันที ทุกครั้งที่ Firestore stream ส่งค่าใหม่เข้ามา
-                    TweenAnimationBuilder<double>(
-                      tween: Tween(begin: 0, end: numericValue),
-                      duration: const Duration(milliseconds: 500),
-                      curve: Curves.easeOut,
-                      builder: (context, animatedValue, _) {
-                        return Text(
-                          format(animatedValue),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 26,
-                            height: 1,
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: iconColor.withValues(alpha: 0.16),
               ),
+              child: Icon(icon, size: 18, color: iconColor),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).textTheme.bodySmall?.color,
+              ),
+            ),
+            const SizedBox(height: 4),
+            // ตัวเลขไล่จากค่าเดิมไปค่าใหม่ (นับขึ้น/ลง) แทนกระโดด
+            // ทันที ทุกครั้งที่ Firestore stream ส่งค่าใหม่เข้ามา
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: numericValue),
+              duration: const Duration(milliseconds: 500),
+              curve: Curves.easeOut,
+              builder: (context, animatedValue, _) {
+                return Text(
+                  format(animatedValue),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 26,
+                    height: 1,
+                  ),
+                );
+              },
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+// แผงสรุปสถานะฟาร์มโดยรวม (อุปกรณ์ออนไลน์กี่ตัว/ความชื้นเฉลี่ย) เป็นแถบ
+// progress bar — ใช้ข้อมูลจริงที่มีอยู่แล้วทั้งคู่ ไม่ใช้ค่าสมมติ
+class FleetHealthCard extends StatelessWidget {
+  final int onlineCount;
+  final int totalCount;
+  final double avgMoisture;
+
+  const FleetHealthCard({
+    super.key,
+    required this.onlineCount,
+    required this.totalCount,
+    required this.avgMoisture,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final onlineRatio = totalCount == 0 ? 0.0 : onlineCount / totalCount;
+
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "สถานะระบบ",
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+            ),
+            const SizedBox(height: 16),
+            _HealthBar(
+              label: "อุปกรณ์ออนไลน์",
+              valueText: "$onlineCount/$totalCount",
+              ratio: onlineRatio,
+              color: const Color(0xFF2E7D32),
+            ),
+            const SizedBox(height: 16),
+            _HealthBar(
+              label: "ความชื้นเฉลี่ยฟาร์ม",
+              valueText: "${avgMoisture.toStringAsFixed(0)}%",
+              ratio: (avgMoisture / 100).clamp(0, 1),
+              color: const Color(0xFF1E88E5),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HealthBar extends StatelessWidget {
+  final String label;
+  final String valueText;
+  final double ratio;
+  final Color color;
+
+  const _HealthBar({
+    required this.label,
+    required this.valueText,
+    required this.ratio,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+            Text(
+              valueText,
+              style: TextStyle(
+                fontSize: 13,
+                color: color,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: LinearProgressIndicator(
+            value: ratio,
+            minHeight: 8,
+            backgroundColor: color.withValues(alpha: 0.15),
+            valueColor: AlwaysStoppedAnimation(color),
+          ),
+        ),
+      ],
     );
   }
 }
