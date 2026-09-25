@@ -199,6 +199,7 @@ class _HomePageState extends State<HomePage> {
                   padding: const EdgeInsets.only(bottom: 16),
                   children: [
                     SummaryBar(
+                      docs: docs,
                       totalDevices: docs.length,
                       alertCount: alertCount,
                       avgMoisture: avgMoisture,
@@ -325,6 +326,11 @@ class _HomePageState extends State<HomePage> {
                       greeting: _greeting(),
                       searchController: _searchController,
                       onSearchChanged: (v) => setState(() => _searchQuery = v),
+                      onAddDevice: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const AddDevicePage()),
+                      ),
                     ),
                     Expanded(child: content),
                   ],
@@ -346,6 +352,7 @@ class _TopBar extends StatelessWidget {
   final String greeting;
   final TextEditingController searchController;
   final ValueChanged<String> onSearchChanged;
+  final VoidCallback onAddDevice;
 
   const _TopBar({
     required this.uid,
@@ -353,85 +360,111 @@ class _TopBar extends StatelessWidget {
     required this.greeting,
     required this.searchController,
     required this.onSearchChanged,
+    required this.onAddDevice,
   });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: StreamBuilder<DocumentSnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(uid)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                final data = snapshot.data?.data() as Map<String, dynamic>?;
-                final name = data?['displayName'] ??
-                    user.displayName ??
-                    user.email?.split('@')[0] ??
-                    "User";
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "$greeting, $name",
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Text(
-                      "นี่คือสรุปสถานะฟาร์มของคุณตอนนี้",
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Theme.of(context).textTheme.bodySmall?.color,
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-          const SizedBox(width: 16),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 260),
-            child: TextField(
-              controller: searchController,
-              onChanged: onSearchChanged,
-              decoration: const InputDecoration(
-                isDense: true,
-                hintText: "ค้นหาอุปกรณ์...",
-                prefixIcon: Icon(Icons.search, size: 20),
+          // แถวบน: หัวข้อเล็กจางๆ + ค้นหา + กระดิ่ง + โปรไฟล์
+          Row(
+            children: [
+              Text(
+                "แดชบอร์ด",
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).textTheme.bodySmall?.color,
+                ),
               ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          _AlertBell(uid: uid),
-          const SizedBox(width: 12),
-          StreamBuilder<DocumentSnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('users')
-                .doc(uid)
-                .snapshots(),
-            builder: (context, snapshot) {
-              final data = snapshot.data?.data() as Map<String, dynamic>?;
-              final pic = data?['pictureUrl'] ?? user.photoURL;
+              const Spacer(),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 260),
+                child: TextField(
+                  controller: searchController,
+                  onChanged: onSearchChanged,
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    hintText: "ค้นหาอุปกรณ์...",
+                    prefixIcon: Icon(Icons.search, size: 20),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              _AlertBell(uid: uid),
+              const SizedBox(width: 12),
+              StreamBuilder<DocumentSnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(uid)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  final data = snapshot.data?.data() as Map<String, dynamic>?;
+                  final pic = data?['pictureUrl'] ?? user.photoURL;
 
-              return InkWell(
-                borderRadius: BorderRadius.circular(20),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ProfilePage()),
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ProfilePage()),
+                      );
+                    },
+                    child: Avatar(photoUrl: pic, size: 36),
                   );
                 },
-                child: Avatar(photoUrl: pic, size: 36),
-              );
-            },
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          // แถวล่าง: คำทักทาย + ปุ่มเพิ่มอุปกรณ์
+          Row(
+            children: [
+              Expanded(
+                child: StreamBuilder<DocumentSnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(uid)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    final data = snapshot.data?.data() as Map<String, dynamic>?;
+                    final name = data?['displayName'] ??
+                        user.displayName ??
+                        user.email?.split('@')[0] ??
+                        "User";
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "$greeting, $name",
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          "นี่คือสรุปสถานะฟาร์มของคุณตอนนี้",
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Theme.of(context).textTheme.bodySmall?.color,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+              FilledButton.icon(
+                onPressed: onAddDevice,
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text("เพิ่มอุปกรณ์"),
+              ),
+            ],
           ),
         ],
       ),

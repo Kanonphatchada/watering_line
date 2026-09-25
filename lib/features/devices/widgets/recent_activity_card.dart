@@ -151,17 +151,25 @@ class _ActivityRow extends StatelessWidget {
     final color = item.resolved ? const Color(0xFF2E7D32) : Colors.red;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            item.resolved ? Icons.check_circle_outline : Icons.error_outline,
-            size: 18,
-            color: color,
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              item.resolved ? Icons.check_circle_outline : Icons.error_outline,
+              size: 18,
+              color: color,
+            ),
           ),
           const SizedBox(width: 10),
           Expanded(
+            flex: 3,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -172,6 +180,8 @@ class _ActivityRow extends StatelessWidget {
                 ),
                 Text(
                   item.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 12,
                     color: Theme.of(context).textTheme.bodySmall?.color,
@@ -180,11 +190,30 @@ class _ActivityRow extends StatelessWidget {
               ],
             ),
           ),
-          Text(
-            _relativeTime(item.startedAt),
-            style: TextStyle(
-              fontSize: 11,
-              color: Theme.of(context).textTheme.bodySmall?.color,
+          Expanded(
+            child: Text(
+              _relativeTime(item.startedAt),
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 11,
+                color: Theme.of(context).textTheme.bodySmall?.color,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              item.resolved ? "แก้ไขแล้ว" : "กำลังเกิดขึ้น",
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
             ),
           ),
         ],
