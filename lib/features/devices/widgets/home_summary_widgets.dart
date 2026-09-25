@@ -206,37 +206,52 @@ class _WeatherKpiCard extends StatelessWidget {
               colors: [color.withValues(alpha: 0.14), Colors.transparent],
             ),
           ),
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Stack(
             children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: color.withValues(alpha: 0.16),
-                ),
-                child: Icon(icon, size: 18, color: color),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                "พยากรณ์อากาศ",
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Theme.of(context).textTheme.bodySmall?.color,
+              Positioned(
+                right: -18,
+                bottom: -18,
+                child: Icon(
+                  icon,
+                  size: 100,
+                  color: color.withValues(alpha: 0.08),
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                status,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 22,
-                  height: 1,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: color.withValues(alpha: 0.16),
+                      ),
+                      child: Icon(icon, size: 18, color: color),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      "พยากรณ์อากาศ",
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Theme.of(context).textTheme.bodySmall?.color,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      status,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 22,
+                        height: 1,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -275,47 +290,64 @@ class _KpiCard extends StatelessWidget {
             colors: [iconColor.withValues(alpha: 0.14), Colors.transparent],
           ),
         ),
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Stack(
           children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: iconColor.withValues(alpha: 0.16),
-              ),
-              child: Icon(icon, size: 18, color: iconColor),
-            ),
-            const SizedBox(height: 14),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Theme.of(context).textTheme.bodySmall?.color,
+            // ไอคอนใหญ่จางๆ เป็นลายน้ำพื้นหลัง — ให้ความรู้สึกมีภาพประกอบ
+            // โดยไม่แย่งความสนใจจากตัวเลขจริง
+            Positioned(
+              right: -18,
+              bottom: -18,
+              child: Icon(
+                icon,
+                size: 100,
+                color: iconColor.withValues(alpha: 0.08),
               ),
             ),
-            const SizedBox(height: 4),
-            // ตัวเลขไล่จากค่าเดิมไปค่าใหม่ (นับขึ้น/ลง) แทนกระโดด
-            // ทันที ทุกครั้งที่ Firestore stream ส่งค่าใหม่เข้ามา
-            TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0, end: numericValue),
-              duration: const Duration(milliseconds: 500),
-              curve: Curves.easeOut,
-              builder: (context, animatedValue, _) {
-                return Text(
-                  format(animatedValue),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 26,
-                    height: 1,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: iconColor.withValues(alpha: 0.16),
+                    ),
+                    child: Icon(icon, size: 18, color: iconColor),
                   ),
-                );
-              },
+                  const SizedBox(height: 14),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).textTheme.bodySmall?.color,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  // ตัวเลขไล่จากค่าเดิมไปค่าใหม่ (นับขึ้น/ลง) แทนกระโดด
+                  // ทันที ทุกครั้งที่ Firestore stream ส่งค่าใหม่เข้ามา
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: numericValue),
+                    duration: const Duration(milliseconds: 500),
+                    curve: Curves.easeOut,
+                    builder: (context, animatedValue, _) {
+                      return Text(
+                        format(animatedValue),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 26,
+                          height: 1,
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
           ],
         ),
