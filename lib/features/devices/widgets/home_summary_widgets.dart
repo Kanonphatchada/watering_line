@@ -497,6 +497,9 @@ class _SegmentedBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final filled = (ratio * segmentCount).round();
+    // เรืองแสง (glow) เฉพาะโหมดมืด — โหมดสว่างพื้นขาวใส่ glow แล้วดูแปลกๆ
+    // ไม่เข้ากับพื้นหลัง
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Row(
       children: [
@@ -514,7 +517,7 @@ class _SegmentedBar extends StatelessWidget {
                 borderRadius: BorderRadius.circular(3),
                 // ทำให้ช่องที่ติดสว่าง "เรืองแสง" (glow) แทนที่จะแบนราบ —
                 // เฉพาะช่องที่ fill แล้วเท่านั้น ช่องว่างไม่มี glow
-                boxShadow: i < filled
+                boxShadow: i < filled && isDark
                     ? [
                         BoxShadow(
                           color: color.withValues(alpha: 0.7),
