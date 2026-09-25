@@ -553,6 +553,7 @@ class _HomePageState extends State<HomePage> {
                     alertCount: alertCount,
                     avgMoisture: avgMoisture,
                   ),
+                  WeatherForecastCard(docs: docs),
                   // ค้นหาอุปกรณ์ — จำเป็นตอนมีอุปกรณ์เยอะ (เช่น เป็นร้อยตัว)
                   // เลื่อนหาทีละใบไม่ไหว ตอนนี้ซ่อนไว้โดย default เปิด/ปิดผ่าน
                   // เมนูรวมใน AppBar แทน ("ตั้งเวลาทั้งฟาร์ม"/"ลบอุปกรณ์" ย้าย

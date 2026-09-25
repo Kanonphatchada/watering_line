@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shimmer/shimmer.dart';
+import '../services/rain_skip.dart';
 
 class HomeSkeleton extends StatelessWidget {
   const HomeSkeleton({super.key});
@@ -88,6 +90,121 @@ class SummaryBar extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// การ์ดสรุปสถานะพยากรณ์อากาศบนหน้าแดชบอร์ด (dashboard) — อ่านจาก
+// device_registry ของทุกกลุ่ม/ฟาร์มที่อุปกรณ์ผู้ใช้สังกัดอยู่ (ไม่ใช่แค่
+// ฟาร์มเดียว เผื่อผู้ใช้มีหลายฟาร์ม) แตะแล้วเปิดไดอะล็อกตั้งค่าได้เลย
+class WeatherForecastCard extends StatelessWidget {
+  final List<QueryDocumentSnapshot> docs;
+
+  const WeatherForecastCard({super.key, required this.docs});
+
+  @override
+  Widget build(BuildContext context) {
+    final groupIds = docs
+        .map((d) => (d.data() as Map<String, dynamic>)['groupId'] as String?)
+        .whereType<String>()
+        .toSet()
+        .toList();
+
+    if (groupIds.isEmpty) return const SizedBox.shrink();
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('device_registry')
+          .where(FieldPath.documentId, whereIn: groupIds)
+          .snapshots(),
+      builder: (context, snapshot) {
+        final regs = snapshot.data?.docs ?? [];
+        final enabled = regs
+            .where(
+              (d) =>
+                  (d.data() as Map<String, dynamic>)['rainSkipEnabled'] == true,
+            )
+            .toList();
+
+        late final IconData icon;
+        late final Color color;
+        late final String title;
+        late final String subtitle;
+
+        if (enabled.isEmpty) {
+          icon = Icons.cloud_outlined;
+          color = Theme.of(context).colorScheme.outline;
+          title = "พยากรณ์อากาศ";
+          subtitle = "ยังไม่ได้เปิดใช้งาน แตะเพื่อตั้งค่า";
+        } else {
+          final rainSoon = enabled.any(
+            (d) => (d.data() as Map<String, dynamic>)['_rainForecast'] == true,
+          );
+          if (rainSoon) {
+            icon = Icons.umbrella;
+            color = const Color(0xFF1E88E5);
+            title = "ฝนอาจตกเร็วๆนี้";
+            subtitle =
+                "ข้ามรอบรดน้ำอัตโนมัติชั่วคราว (${enabled.length} ฟาร์ม)";
+          } else {
+            icon = Icons.wb_sunny_outlined;
+            color = const Color(0xFF2E7D32);
+            title = "ไม่มีฝนตอนนี้";
+            subtitle = "รดน้ำตามปกติ (${enabled.length} ฟาร์มเปิดใช้งาน)";
+          }
+        }
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          child: Card(
+            margin: EdgeInsets.zero,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => openRainSkipDialog(context, docs),
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: color.withValues(alpha: 0.14),
+                      ),
+                      child: Icon(icon, size: 20, color: color),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                            ),
+                          ),
+                          Text(
+                            subtitle,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color:
+                                  Theme.of(context).textTheme.bodySmall?.color,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right, size: 20),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
