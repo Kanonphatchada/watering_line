@@ -3,3 +3,5 @@
 void clearUrlQueryParams() {}
 
 void reloadPage() {}
+
+Future<Map<String, double>?> getCurrentPosition() async => null;
