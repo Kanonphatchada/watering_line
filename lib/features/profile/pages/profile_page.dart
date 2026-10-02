@@ -25,6 +25,10 @@ class _ProfilePageState extends State<ProfilePage> {
   // checkDevices.js)
   bool _notifyOffline = true;
   bool _notifyFault = true;
+  // สวิตช์หลัก: ปิดแล้วหยุดส่งแจ้งเตือน LINE ทุกประเภท (backend เช็ก
+  // users/{uid}.notifyLine ใน sendLineAlert) ไม่ไปแตะค่าของสวิตช์ย่อย
+  // เปิดกลับมาแล้วสวิตช์ย่อยจะเป็นตามที่เคยตั้งไว้
+  bool _notifyLine = true;
 
   @override
   void initState() {
@@ -62,6 +66,7 @@ class _ProfilePageState extends State<ProfilePage> {
       photoUrl = data?['pictureUrl'] ?? user.photoURL;
       _notifyOffline = data?['notifyOffline'] ?? true;
       _notifyFault = data?['notifyFault'] ?? true;
+      _notifyLine = data?['notifyLine'] ?? true;
       isLoading = false;
     });
   }
@@ -71,7 +76,9 @@ class _ProfilePageState extends State<ProfilePage> {
     if (user == null) return;
 
     setState(() {
-      if (field == 'notifyOffline') {
+      if (field == 'notifyLine') {
+        _notifyLine = value;
+      } else if (field == 'notifyOffline') {
         _notifyOffline = value;
       } else {
         _notifyFault = value;
@@ -250,14 +257,29 @@ class _ProfilePageState extends State<ProfilePage> {
                                 ),
                               ),
                               SwitchListTile(
+                                secondary: const Icon(Icons.chat_outlined),
+                                title: const Text("ส่งแจ้งเตือนไป LINE"),
+                                subtitle: Text(
+                                  _notifyLine
+                                      ? "เปิดอยู่"
+                                      : "ปิดอยู่ — ไม่ส่งข้อความไป LINE เลย",
+                                ),
+                                value: _notifyLine,
+                                onChanged: (v) =>
+                                    _updateNotifyPref('notifyLine', v),
+                              ),
+                              const Divider(height: 1),
+                              SwitchListTile(
                                 secondary: const Icon(Icons.cloud_off),
                                 title: const Text("ขาดการติดต่อ"),
                                 subtitle: const Text(
                                   "แจ้งเตือนเมื่ออุปกรณ์เงียบเกิน 30 นาที",
                                 ),
                                 value: _notifyOffline,
-                                onChanged: (v) =>
-                                    _updateNotifyPref('notifyOffline', v),
+                                onChanged: _notifyLine
+                                    ? (v) =>
+                                        _updateNotifyPref('notifyOffline', v)
+                                    : null,
                               ),
                               SwitchListTile(
                                 secondary:
@@ -267,8 +289,9 @@ class _ProfilePageState extends State<ProfilePage> {
                                   "วาล์ว, เซนเซอร์ หรือ Nano มีปัญหา",
                                 ),
                                 value: _notifyFault,
-                                onChanged: (v) =>
-                                    _updateNotifyPref('notifyFault', v),
+                                onChanged: _notifyLine
+                                    ? (v) => _updateNotifyPref('notifyFault', v)
+                                    : null,
                               ),
                             ],
                           ),
