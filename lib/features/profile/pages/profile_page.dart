@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/app_popup.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../auth/pages/login_page.dart';
@@ -100,26 +101,7 @@ class _ProfilePageState extends State<ProfilePage> {
     if (!mounted) return;
     setState(() => isSaving = false);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: const Color(0xFF2E7D32),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
-        content: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.check_circle, color: Colors.white, size: 20),
-            SizedBox(width: 10),
-            Text(
-              "บันทึกชื่อแล้ว",
-              style:
-                  TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-            ),
-          ],
-        ),
-      ),
-    );
+    showSuccessPopup(context, "บันทึกชื่อแล้ว");
   }
 
   Future<void> _confirmLogout() async {

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shimmer/shimmer.dart';
-import '../services/rain_skip.dart';
+import '../pages/weather_page.dart';
 
 class HomeSkeleton extends StatelessWidget {
   const HomeSkeleton({super.key});
@@ -103,7 +103,7 @@ class SummaryBar extends StatelessWidget {
 
 // การ์ดสรุปสถานะพยากรณ์อากาศ — อยู่ในแถวการ์ดสรุปเดียวกับอุปกรณ์ทั้งหมด/
 // ความชื้นเฉลี่ยแล้ว (แทนที่การ์ดแจ้งเตือนเดิม) อ่านจาก device_registry ของ
-// ทุกกลุ่ม/ฟาร์มที่อุปกรณ์ผู้ใช้สังกัดอยู่ แตะแล้วเปิดไดอะล็อกตั้งค่าได้เลย
+// ทุกกลุ่ม/ฟาร์มที่อุปกรณ์ผู้ใช้สังกัดอยู่ แตะแล้วเปิดหน้าพยากรณ์อากาศ
 class WeatherForecastCard extends StatelessWidget {
   final List<QueryDocumentSnapshot> docs;
 
@@ -122,7 +122,10 @@ class WeatherForecastCard extends StatelessWidget {
         icon: Icons.cloud_outlined,
         color: Theme.of(context).colorScheme.outline,
         status: "ไม่พบฟาร์ม",
-        onTap: () => openRainSkipDialog(context, docs),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const WeatherPage()),
+        ),
       );
     }
 
@@ -171,7 +174,10 @@ class WeatherForecastCard extends StatelessWidget {
           icon: icon,
           color: color,
           status: status,
-          onTap: () => openRainSkipDialog(context, docs),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const WeatherPage()),
+          ),
         );
       },
     );

@@ -5,23 +5,32 @@ import '../pages/graph_page.dart';
 import '../pages/notification_history_page.dart';
 import '../utils/schedule_utils.dart';
 import '../services/device_schedule.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../services/fruit_profiles.dart';
+import '../services/plant_profile.dart';
+import '../utils/moisture_utils.dart';
 import 'status_chip.dart';
 import 'stat_row.dart';
 import 'control_chip.dart';
 import 'action_button.dart';
 import 'last_updated_text.dart';
+import 'fruit_icon.dart';
 import 'moisture_gauge.dart';
+import 'stress_watch_card.dart' show stressLevelColor;
 
 class DeviceCard extends StatefulWidget {
   final String nanoId;
   final Map<String, dynamic> data;
   final int index;
+  // กดกล่องชนิดพืชบนการ์ด (หน้าหลักส่งมา เพราะต้องใช้รายการอุปกรณ์ทั้งหมด)
+  final VoidCallback? onPlantTap;
 
   const DeviceCard({
     super.key,
     required this.nanoId,
     required this.data,
     this.index = 0,
+    this.onPlantTap,
   });
 
   @override
@@ -30,9 +39,6 @@ class DeviceCard extends StatefulWidget {
 
 class DeviceCardState extends State<DeviceCard>
     with SingleTickerProviderStateMixin {
-  late final TextEditingController _controller;
-  final _focusNode = FocusNode();
-
   // อนิเมชั่นตอนการ์ดเพิ่งปรากฏขึ้นครั้งแรก (fade + เลื่อนขึ้นเล็กน้อย) หน่วง
   // เวลาเริ่มตามตำแหน่งในกริด ให้ดูเป็นการ "ไล่โผล่" ทีละใบแทนที่จะโผล่มา
   // พร้อมกันหมดทุกใบ
@@ -45,8 +51,6 @@ class DeviceCardState extends State<DeviceCard>
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController(text: _currentTarget.toString());
-
     _entranceController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 350),
@@ -69,19 +73,7 @@ class DeviceCardState extends State<DeviceCard>
   }
 
   @override
-  void didUpdateWidget(covariant DeviceCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // ซิงก์ค่าจาก Firestore เข้า field เฉพาะตอนที่ user ไม่ได้กำลังพิมพ์อยู่
-    // กันไม่ให้ค่าที่พิมพ์ค้างถูกทับตอน snapshot ใหม่เข้ามาระหว่างพิมพ์
-    if (!_focusNode.hasFocus) {
-      _controller.text = _currentTarget.toString();
-    }
-  }
-
-  @override
   void dispose() {
-    _controller.dispose();
-    _focusNode.dispose();
     _entranceController.dispose();
     super.dispose();
   }
@@ -93,7 +85,7 @@ class DeviceCardState extends State<DeviceCard>
     final currentTarget = _currentTarget;
     final moisture = (data['Moisture'] ?? 0).toDouble();
     final automois = (data['Automois'] ?? 20).toDouble();
-    final isAlert = moisture > automois;
+    final isAlert = isMoistureAlert(moisture, automois);
     final isOffline = data['offline'] == true;
     final faultType = data['faultType'] as String?;
     final hasValveFault = !isOffline && faultType != null;
@@ -325,94 +317,10 @@ class DeviceCardState extends State<DeviceCard>
                 // อุปกรณ์เอง ทำให้ดูเหมือนตั้งเวลาทั้งฟาร์มไปแล้ว "ไม่มีอะไร
                 // เกิดขึ้น" ทั้งที่จริงๆทำงานถูกต้องอยู่เบื้องหลัง
                 _ScheduleStatusLabel(data: data),
-                const SizedBox(height: 14),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Theme.of(context).dividerColor,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.tune,
-                          size: 18,
-                          color: Theme.of(context).textTheme.bodySmall?.color),
-                      const SizedBox(width: 8),
-                      const Expanded(
-                        child: Text(
-                          "ตั้งค่าความชื้น",
-                          style: TextStyle(fontSize: 13),
-                        ),
-                      ),
-                      SizedBox(
-                        width: 70,
-                        child: TextField(
-                          controller: _controller,
-                          focusNode: _focusNode,
-                          keyboardType: TextInputType.number,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 13),
-                          decoration: const InputDecoration(
-                            isDense: true,
-                            contentPadding: EdgeInsets.symmetric(vertical: 8),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      SizedBox(
-                        height: 36,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 14),
-                          ),
-                          onPressed: () async {
-                            final newValue = double.tryParse(_controller.text);
-
-                            if (newValue != null) {
-                              await FirebaseFirestore.instance
-                                  .collection('ESP32')
-                                  .doc(nanoId)
-                                  .update({
-                                'Automois': newValue,
-                              });
-
-                              if (!context.mounted) return;
-
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  behavior: SnackBarBehavior.floating,
-                                  backgroundColor: const Color(0xFF2E7D32),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  margin: const EdgeInsets.all(16),
-                                  content: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.check_circle,
-                                          color: Colors.white, size: 20),
-                                      SizedBox(width: 10),
-                                      Text(
-                                        "อัปเดตค่าความชื้นแล้ว",
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            }
-                          },
-                          child: const Text("บันทึก"),
-                        ),
-                      ),
-                    ],
-                  ),
+                _PlantProfileLabel(
+                  nanoId: nanoId,
+                  data: data,
+                  onTap: widget.onPlantTap,
                 ),
                 const SizedBox(height: 14),
                 const Divider(height: 1),
@@ -625,5 +533,150 @@ class _ScheduleActionButton extends StatelessWidget {
         onTap: () => openDeviceScheduleDialog(context, nanoId, data),
       );
     });
+  }
+}
+
+// กล่องชนิดพืชบนการ์ด — บอกพืช/ความชื้นเป้าหมาย กด "เปลี่ยน" แล้วเปิดหน้า
+// ชนิดพืชโดยติ๊กอุปกรณ์ตัวนี้ไว้ให้เลย ตั้งค่าเฉพาะการ์ดนี้ได้ในไม่กี่คลิก
+// (พิมพ์ % เองได้ที่ "กำหนดเอง") ไม่ต้องไปไล่หาในรายการอุปกรณ์
+class _PlantProfileLabel extends StatelessWidget {
+  final String nanoId;
+  final Map<String, dynamic> data;
+  final VoidCallback? onTap;
+
+  const _PlantProfileLabel({
+    required this.nanoId,
+    required this.data,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final profile = resolvePlantProfile(data);
+    final target = (data['Automois'] ?? 20).toDouble();
+    final scheme = Theme.of(context).colorScheme;
+    final muted = Theme.of(context).textTheme.bodySmall?.color;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+
+    // ผลไม้/ช่วงที่เลือกไว้เก็บใน users/{uid}.plantSettings (ดู
+    // PlantProfilePage) — การ์ดทุกใบฟัง doc เดียวกัน SDK รวมเป็น listener
+    // เดียวให้เอง ไม่ได้ยิง read เพิ่มตามจำนวนการ์ด
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: uid == null
+          ? null
+          : FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
+      builder: (context, snapshot) {
+        final settings = snapshot.data?.data()?['plantSettings'];
+        final setting = settings is Map ? settings[nanoId] : null;
+        final label = plantLabelFor(
+          target,
+          setting is Map<String, dynamic> ? setting : null,
+        );
+        final isFruit = setting is Map && setting['plant'] == 'fruit';
+        final stress = stressStatusFor(
+          target,
+          setting is Map<String, dynamic> ? setting : null,
+        );
+
+        return Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: scheme.outlineVariant.withValues(alpha: 0.8),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    if (isFruit)
+                      FruitIcon(size: 20, color: scheme.primary)
+                    else
+                      Icon(
+                        profile?.icon ?? Icons.tune,
+                        size: 20,
+                        color: scheme.primary,
+                      ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                "ชนิดพืช",
+                                style: TextStyle(fontSize: 11, color: muted),
+                              ),
+                              if (stress != null) ...[
+                                const SizedBox(width: 6),
+                                _StressBadge(status: stress),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            "$label · ${formatMoisture(target)}%",
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (onTap != null) ...[
+                      const SizedBox(width: 8),
+                      Text(
+                        "เปลี่ยน",
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: scheme.primary,
+                        ),
+                      ),
+                      Icon(Icons.chevron_right,
+                          size: 20, color: scheme.primary),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ป้ายนับวันงดน้ำบนการ์ดอุปกรณ์ — สีเดียวกับการ์ด "ต้นที่กำลังงดน้ำ"
+class _StressBadge extends StatelessWidget {
+  final StressStatus status;
+
+  const _StressBadge({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = stressLevelColor(status.level);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: c.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: c.withValues(alpha: 0.6)),
+      ),
+      child: Text(
+        "งดน้ำ ${status.dayNumber}/${status.plannedDays} วัน",
+        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: c),
+      ),
+    );
   }
 }
