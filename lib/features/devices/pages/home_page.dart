@@ -13,6 +13,7 @@ import '../widgets/device_card.dart';
 import '../widgets/home_summary_widgets.dart';
 import '../widgets/recent_activity_card.dart';
 import '../widgets/side_nav_rail.dart';
+import '../widgets/status_chip.dart' show faultLabel;
 import '../widgets/stress_watch_card.dart';
 import '../utils/moisture_utils.dart';
 
@@ -141,10 +142,10 @@ class _HomePageState extends State<HomePage> {
                     null)
                   (
                     doc.id,
-                    (doc.data() as Map<String, dynamic>)['faultType'] ==
-                            'valve_stuck_open'
-                        ? "วาล์วค้างเปิด"
-                        : "วาล์วอาจไม่ทำงาน",
+                    faultLabel(
+                      (doc.data() as Map<String, dynamic>)['faultType']
+                          as String?,
+                    ),
                   ),
             ];
 

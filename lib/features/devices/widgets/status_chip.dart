@@ -1,5 +1,16 @@
 import 'package:flutter/material.dart';
 
+// ชื่อปัญหาจาก faultType ที่ backend (checkDevices.js) เขียนไว้ — เดิมทุกค่า
+// ที่ไม่ใช่ valve_stuck_open ถูกโชว์เป็น "วาล์วอาจไม่ทำงาน" หมด รวมถึง
+// nano_error/sensor_error ที่ไม่เกี่ยวกับวาล์วเลย ทำให้เข้าใจผิดว่าวาล์วเสีย
+String faultLabel(String? faultType) => switch (faultType) {
+      "valve_stuck_open" => "วาล์วค้างเปิด",
+      "valve_no_flow" => "วาล์วอาจไม่ทำงาน",
+      "nano_error" => "ติดต่อ Nano ไม่ได้",
+      "sensor_error" => "เซนเซอร์อ่านค่าไม่ได้",
+      _ => "อุปกรณ์ผิดปกติ",
+    };
+
 class StatusChip extends StatelessWidget {
   final bool isAlert;
   final bool isOffline;
@@ -28,10 +39,12 @@ class StatusChip extends StatelessWidget {
       label = "ขาดการติดต่อ";
     } else if (hasValveFault) {
       color = Colors.orange.shade800;
-      icon = Icons.report_problem_outlined;
-      label = faultType == "valve_stuck_open"
-          ? "วาล์วค้างเปิด"
-          : "วาล์วอาจไม่ทำงาน";
+      icon = switch (faultType) {
+        "nano_error" => Icons.link_off,
+        "sensor_error" => Icons.sensors_off,
+        _ => Icons.report_problem_outlined,
+      };
+      label = faultLabel(faultType);
     } else if (isAlert) {
       color = Colors.red;
       icon = Icons.warning_amber_rounded;
