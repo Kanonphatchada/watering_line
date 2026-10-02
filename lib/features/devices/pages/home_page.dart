@@ -2,16 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'add_device_page.dart';
-import 'schedule_overview_page.dart';
+import 'plant_profile_page.dart';
+import 'schedule_page.dart';
+import 'weather_page.dart';
 import '../../profile/pages/profile_page.dart';
 import '../../../shared/widgets/avatar.dart';
-import '../services/farm_schedule.dart';
-import '../services/rain_skip.dart';
 import '../services/remove_device.dart';
 import '../widgets/device_card.dart';
 import '../widgets/home_summary_widgets.dart';
 import '../widgets/recent_activity_card.dart';
 import '../widgets/side_nav_rail.dart';
+import '../widgets/status_chip.dart' show faultLabel;
+import '../widgets/stress_watch_card.dart';
+import '../utils/moisture_utils.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -123,7 +126,7 @@ class _HomePageState extends State<HomePage> {
               final moisture = (data['Moisture'] ?? 0).toDouble();
               final automois = (data['Automois'] ?? 20).toDouble();
               moistureSum += moisture;
-              if (moisture > automois) alertCount++;
+              if (isMoistureAlert(moisture, automois)) alertCount++;
               if (data['offline'] != true) onlineCount++;
             }
             final avgMoisture = moistureSum / docs.length;
@@ -138,10 +141,10 @@ class _HomePageState extends State<HomePage> {
                     null)
                   (
                     doc.id,
-                    (doc.data() as Map<String, dynamic>)['faultType'] ==
-                            'valve_stuck_open'
-                        ? "วาล์วค้างเปิด"
-                        : "วาล์วอาจไม่ทำงาน",
+                    faultLabel(
+                      (doc.data() as Map<String, dynamic>)['faultType']
+                          as String?,
+                    ),
                   ),
             ];
 
@@ -204,6 +207,10 @@ class _HomePageState extends State<HomePage> {
                       alertCount: alertCount,
                       avgMoisture: avgMoisture,
                     ),
+                    StressWatchCard(
+                      docs: docs,
+                      padding: const EdgeInsets.fromLTRB(12, 16, 12, 0),
+                    ),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(12, 16, 12, 8),
                       child: LayoutBuilder(
@@ -265,27 +272,71 @@ class _HomePageState extends State<HomePage> {
                         ),
                       )
                     else
-                      GridView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate:
-                            const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 420,
-                          mainAxisExtent: 420,
-                          mainAxisSpacing: 16,
-                          crossAxisSpacing: 16,
-                        ),
-                        itemCount: filteredDocs.length,
-                        itemBuilder: (context, index) {
-                          final doc = filteredDocs[index];
-                          final data = doc.data() as Map<String, dynamic>;
+                      // ไม่ล็อกความสูงการ์ดตายตัวอีกแล้ว — ตอนย่อหน้าจอ/จอโทรศัพท์
+                      // ข้อความไทยตัดบรรทัดเพิ่ม เนื้อหาสูงขึ้น ถ้าล็อกไว้ที่ 420
+                      // จะโดนตัดหรือเพี้ยน เลยจัดเป็นแถวเอง: คำนวณจำนวนคอลัมน์จาก
+                      // ความกว้างจริง (โทรศัพท์ = 1 คอลัมน์) การ์ดในแถวเดียวกันสูง
+                      // เท่ากันตามใบที่สูงที่สุด
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          const gap = 16.0;
+                          const minCardWidth = 340.0;
+                          final available = constraints.maxWidth - 24;
+                          final columns =
+                              ((available + gap) / (minCardWidth + gap))
+                                  .floor()
+                                  .clamp(1, 3);
 
-                          return DeviceCard(
-                            key: ValueKey(doc.id),
-                            nanoId: doc.id,
-                            data: data,
-                            index: index,
+                          Widget cardAt(int index) {
+                            final doc = filteredDocs[index];
+                            final data = doc.data() as Map<String, dynamic>;
+                            return DeviceCard(
+                              key: ValueKey(doc.id),
+                              nanoId: doc.id,
+                              data: data,
+                              index: index,
+                              onPlantTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => PlantProfilePage(
+                                    docs: docs,
+                                    initialDeviceId: doc.id,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
+
+                          final rows = <Widget>[];
+                          for (var start = 0;
+                              start < filteredDocs.length;
+                              start += columns) {
+                            rows.add(
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: gap),
+                                child: IntrinsicHeight(
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      for (var c = 0; c < columns; c++) ...[
+                                        if (c > 0) const SizedBox(width: gap),
+                                        Expanded(
+                                          child: start + c < filteredDocs.length
+                                              ? cardAt(start + c)
+                                              : const SizedBox.shrink(),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
+
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: Column(children: rows),
                           );
                         },
                       ),
@@ -302,14 +353,20 @@ class _HomePageState extends State<HomePage> {
                   context,
                   MaterialPageRoute(builder: (_) => const AddDevicePage()),
                 ),
-                onFarmSchedule: () => openFarmScheduleDialog(context, docs),
-                onScheduleOverview: () => Navigator.push(
+                onSchedule: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SchedulePage()),
+                ),
+                onWeather: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const WeatherPage()),
+                ),
+                onPlantProfile: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => ScheduleOverviewPage(docs: docs),
+                    builder: (_) => PlantProfilePage(docs: docs),
                   ),
                 ),
-                onWeather: () => openRainSkipDialog(context, docs),
                 onRemoveDevice: () => openRemoveDevicePicker(context, docs),
                 onProfile: () => Navigator.push(
                   context,
@@ -491,7 +548,7 @@ class _AlertBell extends StatelessWidget {
               final data = doc.data() as Map<String, dynamic>;
               double moisture = (data['Moisture'] ?? 0).toDouble();
               double automois = (data['Automois'] ?? 20).toDouble();
-              if (moisture > automois) count++;
+              if (isMoistureAlert(moisture, automois)) count++;
             }
           }
 
@@ -547,7 +604,7 @@ class _AlertBell extends StatelessWidget {
           double moisture = (data['Moisture'] ?? 0).toDouble();
           double automois = (data['Automois'] ?? 20).toDouble();
 
-          if (moisture > automois) {
+          if (isMoistureAlert(moisture, automois)) {
             alerts.add(
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),

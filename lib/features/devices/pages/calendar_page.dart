@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:shimmer/shimmer.dart';
+import '../utils/moisture_utils.dart';
 
 class CalendarPage extends StatefulWidget {
   final String nanoId; // 🔥 รับ nanoId
@@ -80,13 +81,13 @@ class _CalendarPageState extends State<CalendarPage> {
 
   // สถานะ + สีของความชื้นวันนั้น เทียบกับค่าที่กำหนด ใช้ร่วมกันทั้ง
   // จุดสีบนปฏิทินและ dialog รายละเอียดวัน กันไม่ให้ตรรกะ 2 จุดเพี้ยนไม่ตรงกัน
+  // (firmware รดน้ำเมื่อต่ำกว่าค่าที่กำหนด — ต่ำกว่า = ดินแห้ง, ถึงหรือสูงกว่า
+  // = ปกติ ตรงกับการ์ด/กราฟ/ประวัติที่ใช้ isMoistureAlert เหมือนกัน)
   (Color, String) _statusFor(double moisture) {
-    if (moisture < targetMoisture) {
-      return (Colors.yellow.shade700, "ต่ำกว่าค่าที่กำหนด");
-    } else if (moisture <= targetMoisture + 2) {
-      return (Colors.green, "ใกล้เคียงค่าที่กำหนด");
+    if (isMoistureAlert(moisture, targetMoisture)) {
+      return (Colors.red, "ต่ำกว่าค่าที่กำหนด (ดินแห้ง)");
     } else {
-      return (Colors.red, "สูงกว่าค่าที่กำหนด");
+      return (Colors.green, "ถึงค่าที่กำหนด");
     }
   }
 
@@ -166,17 +167,13 @@ class _CalendarPageState extends State<CalendarPage> {
                       spacing: 16,
                       runSpacing: 6,
                       children: [
-                        _LegendDot(
-                          color: Colors.yellow.shade700,
-                          label: "ต่ำกว่าค่าที่กำหนด",
-                        ),
                         const _LegendDot(
                           color: Colors.green,
-                          label: "ใกล้เคียงค่าที่กำหนด",
+                          label: "ถึงค่าที่กำหนด",
                         ),
                         const _LegendDot(
                           color: Colors.red,
-                          label: "สูงกว่าค่าที่กำหนด",
+                          label: "ต่ำกว่าค่าที่กำหนด (ดินแห้ง)",
                         ),
                         _LegendDot(
                           color:
