@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/app_popup.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
@@ -60,25 +61,9 @@ Future<void> confirmAndRemoveDevice(BuildContext context, String nanoId) async {
   // backend เป็น Render free tier — ถ้าไม่มีใครเรียกนานๆ จะ sleep เอง ตื่น
   // ครั้งแรก (cold start) ใช้เวลาได้ถึง 30-60 วิ ถ้าไม่โชว์ loading ไว้ก่อน
   // ผู้ใช้จะคิดว่ากดแล้วไม่มีอะไรเกิดขึ้นเลย (เจอเคสนี้จริงมาแล้ว)
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(
-      duration: Duration(seconds: 60),
-      content: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-          SizedBox(width: 12),
-          Expanded(
-            child:
-                Text("กำลังลบอุปกรณ์... อาจใช้เวลาสักครู่ถ้า server เพิ่งตื่น"),
-          ),
-        ],
-      ),
-    ),
+  final closeLoading = showLoadingPopup(
+    context,
+    "กำลังลบอุปกรณ์...\nอาจใช้เวลาสักครู่ถ้า server เพิ่งตื่น",
   );
 
   try {
@@ -94,44 +79,23 @@ Future<void> confirmAndRemoveDevice(BuildContext context, String nanoId) async {
         )
         .timeout(const Duration(seconds: 60));
 
+    // ปิดป็อปอัพ loading ก่อนเสมอ ถึงหน้าจะถูกปิดไปแล้วก็ไม่ค้างกลางจอ
+    closeLoading();
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
     if (res.statusCode == 200) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: const Color(0xFF2E7D32),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          margin: const EdgeInsets.all(16),
-          content: const Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.check_circle, color: Colors.white, size: 20),
-              SizedBox(width: 10),
-              Text(
-                "ลบอุปกรณ์แล้ว",
-                style:
-                    TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
-        ),
-      );
+      showSuccessPopup(context, "ลบอุปกรณ์แล้ว");
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("ลบอุปกรณ์ไม่สำเร็จ ลองใหม่อีกครั้ง")),
-      );
+      showErrorPopup(context, "ลบอุปกรณ์ไม่สำเร็จ ลองใหม่อีกครั้ง");
     }
   } catch (err) {
+    // ปิดป็อปอัพ loading ก่อนเสมอ ถึงหน้าจะถูกปิดไปแล้วก็ไม่ค้างกลางจอ
+    closeLoading();
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
     final message = err is TimeoutException
         ? "เชื่อมต่อ server ไม่ได้ (server อาจกำลัง sleep) ลองใหม่อีกครั้ง"
         : "ลบอุปกรณ์ไม่สำเร็จ ลองใหม่อีกครั้ง";
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    showErrorPopup(context, message);
   }
 }
 
@@ -143,9 +107,7 @@ Future<void> openRemoveDevicePicker(
   List<QueryDocumentSnapshot> docs,
 ) async {
   if (docs.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("ยังไม่มีอุปกรณ์ให้ลบ")),
-    );
+    showAppPopup(context, "ยังไม่มีอุปกรณ์ให้ลบ", kind: PopupKind.info);
     return;
   }
 
