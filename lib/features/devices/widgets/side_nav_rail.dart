@@ -5,8 +5,7 @@ import '../../../main.dart' show themeModeNotifier, toggleThemeMode;
 // กว้างแบบเว็บ เข้าถึงเมนูหลักได้ทันทีโดยไม่ต้องกดเปิด/ปิดอีกต่อไป
 class SideNavRail extends StatefulWidget {
   final VoidCallback onAddDevice;
-  final VoidCallback onFarmSchedule;
-  final VoidCallback onScheduleOverview;
+  final VoidCallback onSchedule;
   final VoidCallback onWeather;
   final VoidCallback onPlantProfile;
   final VoidCallback onRemoveDevice;
@@ -15,8 +14,7 @@ class SideNavRail extends StatefulWidget {
   const SideNavRail({
     super.key,
     required this.onAddDevice,
-    required this.onFarmSchedule,
-    required this.onScheduleOverview,
+    required this.onSchedule,
     required this.onWeather,
     required this.onPlantProfile,
     required this.onRemoveDevice,
@@ -28,10 +26,6 @@ class SideNavRail extends StatefulWidget {
 }
 
 class _SideNavRailState extends State<SideNavRail> {
-  // แผงเมนูย่อย "ตารางเวลา" เด้งออกมาเป็นแท็บใหญ่ข้างแถบไอคอน แทนเมนูเล็กๆ
-  // แบบ hover เดิม (PopupMenuButton) — เปิด/ปิดด้วย state ตรงๆ ไม่ใช้ overlay
-  bool _scheduleOpen = false;
-
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -55,7 +49,7 @@ class _SideNavRailState extends State<SideNavRail> {
                   icon: Icons.grid_view_rounded,
                   tooltip: "หน้าหลัก",
                   active: true,
-                  onTap: () => setState(() => _scheduleOpen = false),
+                  onTap: () {},
                 ),
                 const SizedBox(height: 4),
                 _NavIcon(
@@ -64,20 +58,24 @@ class _SideNavRailState extends State<SideNavRail> {
                   onTap: widget.onAddDevice,
                 ),
                 const SizedBox(height: 4),
+                // ตารางเวลา/พยากรณ์อากาศ เป็นหน้าของตัวเองแล้ว (SchedulePage /
+                // WeatherPage) ไม่ใช่แผงเมนูย่อยเด้งออกมาเหมือนเดิม
                 _NavIcon(
                   icon: Icons.schedule,
                   tooltip: "ตารางเวลา",
-                  active: _scheduleOpen,
-                  onTap: () => setState(() => _scheduleOpen = !_scheduleOpen),
+                  onTap: widget.onSchedule,
+                ),
+                const SizedBox(height: 4),
+                _NavIcon(
+                  icon: Icons.cloud_outlined,
+                  tooltip: "พยากรณ์อากาศ",
+                  onTap: widget.onWeather,
                 ),
                 const SizedBox(height: 4),
                 _NavIcon(
                   icon: Icons.local_florist_outlined,
                   tooltip: "ชนิดพืช",
-                  onTap: () {
-                    setState(() => _scheduleOpen = false);
-                    widget.onPlantProfile();
-                  },
+                  onTap: widget.onPlantProfile,
                 ),
                 const SizedBox(height: 4),
                 _NavIcon(
@@ -111,24 +109,6 @@ class _SideNavRailState extends State<SideNavRail> {
             ),
           ),
         ),
-        // เปิด/ปิดทันทีไม่มีอนิเมชั่น (เคยใช้ AnimatedSize แล้วรู้สึกกระตุก
-        // เพราะหน้านี้ rebuild บ่อยจาก Firestore stream อยู่แล้ว)
-        if (_scheduleOpen)
-          _SchedulePanel(
-            onClose: () => setState(() => _scheduleOpen = false),
-            onFarmSchedule: () {
-              setState(() => _scheduleOpen = false);
-              widget.onFarmSchedule();
-            },
-            onScheduleOverview: () {
-              setState(() => _scheduleOpen = false);
-              widget.onScheduleOverview();
-            },
-            onWeather: () {
-              setState(() => _scheduleOpen = false);
-              widget.onWeather();
-            },
-          ),
       ],
     );
   }
@@ -171,75 +151,6 @@ class _NavIcon extends StatelessWidget {
               child: Icon(icon, color: iconColor, size: 22),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-// แผงตารางเวลา — แท็บใหญ่ที่เด้งออกมาข้างแถบไอคอนถาวร (ไม่ใช่เมนู hover
-// เล็กๆ แบบเดิม) แสดงหัวข้อ + รายการ 3 อันเต็มความกว้าง กดปิดได้ด้วยปุ่ม X
-class _SchedulePanel extends StatelessWidget {
-  final VoidCallback onClose;
-  final VoidCallback onFarmSchedule;
-  final VoidCallback onScheduleOverview;
-  final VoidCallback onWeather;
-
-  const _SchedulePanel({
-    required this.onClose,
-    required this.onFarmSchedule,
-    required this.onScheduleOverview,
-    required this.onWeather,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      width: 240,
-      color: isDark ? const Color(0xFF141517) : Theme.of(context).cardColor,
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
-              child: Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      "ตารางเวลา",
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, size: 20),
-                    onPressed: onClose,
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.schedule),
-              title: const Text("ตั้งเวลาทั้งฟาร์ม"),
-              onTap: onFarmSchedule,
-            ),
-            ListTile(
-              leading: const Icon(Icons.fact_check_outlined),
-              title: const Text("สรุปตารางเวลา"),
-              onTap: onScheduleOverview,
-            ),
-            ListTile(
-              leading: const Icon(Icons.cloud_outlined),
-              title: const Text("พยากรณ์อากาศ"),
-              onTap: onWeather,
-            ),
-          ],
         ),
       ),
     );

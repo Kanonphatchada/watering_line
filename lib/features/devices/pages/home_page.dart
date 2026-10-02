@@ -3,11 +3,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'add_device_page.dart';
 import 'plant_profile_page.dart';
-import 'schedule_overview_page.dart';
+import 'schedule_page.dart';
+import 'weather_page.dart';
 import '../../profile/pages/profile_page.dart';
 import '../../../shared/widgets/avatar.dart';
-import '../services/farm_schedule.dart';
-import '../services/rain_skip.dart';
 import '../services/remove_device.dart';
 import '../widgets/device_card.dart';
 import '../widgets/home_summary_widgets.dart';
@@ -319,14 +318,14 @@ class _HomePageState extends State<HomePage> {
                   context,
                   MaterialPageRoute(builder: (_) => const AddDevicePage()),
                 ),
-                onFarmSchedule: () => openFarmScheduleDialog(context, docs),
-                onScheduleOverview: () => Navigator.push(
+                onSchedule: () => Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => ScheduleOverviewPage(docs: docs),
-                  ),
+                  MaterialPageRoute(builder: (_) => const SchedulePage()),
                 ),
-                onWeather: () => openRainSkipDialog(context, docs),
+                onWeather: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const WeatherPage()),
+                ),
                 onPlantProfile: () => Navigator.push(
                   context,
                   MaterialPageRoute(
