@@ -93,298 +93,277 @@ class DeviceCardState extends State<DeviceCard>
     final card = Card(
       child: Padding(
         padding: const EdgeInsets.all(18),
-        // การ์ดทุกใบสูงเท่ากันตายตัว (กำหนดจาก GridView) — ห่อด้วย
-        // SingleChildScrollView กันไว้ ถ้าเนื้อหาในอนาคตยาวเกินพื้นที่การ์ด
-        // จะแค่ scroll ข้างในการ์ดเอง ไม่มีทาง overflow ล้นออกมาอีก — ปิด
-        // scrollbar ที่โผล่มาด้วย (ตอนนี้เนื้อหาพอดีการ์ดอยู่แล้ว ไม่มีอะไร
-        // ต้องเลื่อนจริงๆ) ยังคง scroll ได้เผื่ออนาคตเนื้อหายาวขึ้น แค่ไม่โชว์
-        // แถบ scrollbar ให้เกะกะ
-        child: ScrollConfiguration(
-          behavior: ScrollConfiguration.of(context).copyWith(
-            scrollbars: false,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        // ความสูงการ์ดปรับตามเนื้อหา (หน้าหลักจัดแถวให้การ์ดในแถวเดียวกันสูง
+        // เท่ากันเอง) จึงไม่ต้องมี scroll ในการ์ดอีก
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Row(
-                  children: [
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: isOffline
-                            ? Colors.grey.shade200
-                            : (hasValveFault
-                                ? Colors.orange.shade50
-                                : (isAlert
-                                    ? Colors.red.shade50
-                                    : const Color(0xFFE8F5E9))),
-                      ),
-                      child: Icon(
-                        isOffline
-                            ? Icons.cloud_off
-                            : (hasValveFault
-                                ? Icons.report_problem_outlined
-                                : Icons.water_drop),
-                        color: isOffline
-                            ? Colors.grey.shade600
-                            : (hasValveFault
-                                ? Colors.orange.shade800
-                                : (isAlert
-                                    ? Colors.red
-                                    : const Color(0xFF2E7D32))),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            nanoId,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          if (data['groupId'] != null)
-                            Text(
-                              "กลุ่ม: ${data['groupId']}",
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.color,
-                              ),
-                            ),
-                          const SizedBox(height: 2),
-                          LastUpdatedText(
-                            nanoId: nanoId,
-                            lastSeen: data['lastSeen'] as Timestamp?,
-                          ),
-                        ],
-                      ),
-                    ),
-                    StatusChip(
-                      isAlert: isAlert,
-                      isOffline: isOffline,
-                      faultType: faultType,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  width: 44,
+                  height: 44,
                   decoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .surfaceContainerHighest
-                        .withValues(alpha: 0.4),
-                    borderRadius: BorderRadius.circular(12),
+                    shape: BoxShape.circle,
+                    color: isOffline
+                        ? Colors.grey.shade200
+                        : (hasValveFault
+                            ? Colors.orange.shade50
+                            : (isAlert
+                                ? Colors.red.shade50
+                                : const Color(0xFFE8F5E9))),
                   ),
-                  child: Row(
+                  child: Icon(
+                    isOffline
+                        ? Icons.cloud_off
+                        : (hasValveFault
+                            ? Icons.report_problem_outlined
+                            : Icons.water_drop),
+                    color: isOffline
+                        ? Colors.grey.shade600
+                        : (hasValveFault
+                            ? Colors.orange.shade800
+                            : (isAlert ? Colors.red : const Color(0xFF2E7D32))),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: MoistureGauge(
-                          moisture: data['Moisture'] as num?,
-                          target: currentTarget,
-                          isOffline: isOffline,
+                      Text(
+                        nanoId,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const StatDivider(),
-                      Expanded(
-                        child: StatTile(
-                          icon: Icons.flag,
-                          label: "Target",
-                          value: currentTarget.toString(),
+                      if (data['groupId'] != null)
+                        Text(
+                          "กลุ่ม: ${data['groupId']}",
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(context).textTheme.bodySmall?.color,
+                          ),
                         ),
-                      ),
-                      const StatDivider(),
-                      Expanded(
-                        child: StatTile(
-                          icon: Icons.schedule,
-                          label: "Time",
-                          value: "${data['Time'] ?? '-'}",
-                        ),
+                      const SizedBox(height: 2),
+                      LastUpdatedText(
+                        nanoId: nanoId,
+                        lastSeen: data['lastSeen'] as Timestamp?,
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ControlChip(
-                        label: "Auto",
-                        icon: Icons.auto_mode,
-                        // ถ้าเปิดใช้ตารางเวลาไว้ โชว์ "ความตั้งใจ" ของผู้ใช้
-                        // (desiredAuto) แทนค่า Auto จริงที่อาจถูกตารางเวลา
-                        // บังคับปิดชั่วคราวอยู่ — ไม่งั้นสวิตช์จะดูเหมือน
-                        // ปิดเองโดยไม่มีเหตุผลตอนอยู่นอกช่วงเวลา
-                        value: (data['scheduleEnabled'] == true)
-                            ? (data['desiredAuto'] ?? data['Auto'] ?? false)
-                            : (data['Auto'] ?? false),
-                        onChanged: (val) async {
-                          final scheduleEnabled =
-                              data['scheduleEnabled'] == true;
-
-                          if (!scheduleEnabled) {
-                            // ของเดิม ไม่เปลี่ยนพฤติกรรมเลยถ้าไม่ได้เปิดใช้
-                            // ตารางเวลา
-                            await FirebaseFirestore.instance
-                                .collection('ESP32')
-                                .doc(nanoId)
-                                .update({
-                              'Auto': val,
-                              if (val == true) 'Valve': false,
-                            });
-                            return;
-                          }
-
-                          final scheduleStart =
-                              data['scheduleStart'] as String?;
-                          final scheduleEnd = data['scheduleEnd'] as String?;
-                          bool allowedNow = true;
-                          if (scheduleStart != null && scheduleEnd != null) {
-                            allowedNow = resolveScheduleAllowed(
-                              mode: data['scheduleMode'] == 'block'
-                                  ? 'block'
-                                  : 'allow',
-                              startHHmm: scheduleStart,
-                              endHHmm: scheduleEnd,
-                              exceptEnabled:
-                                  data['scheduleExceptEnabled'] == true,
-                              exceptStartHHmm:
-                                  data['scheduleExceptStart'] as String?,
-                              exceptEndHHmm:
-                                  data['scheduleExceptEnd'] as String?,
-                            );
-                          }
-                          final effective = val && allowedNow;
-
-                          await FirebaseFirestore.instance
-                              .collection('ESP32')
-                              .doc(nanoId)
-                              .update({
-                            'desiredAuto': val,
-                            'Auto': effective,
-                            if (effective) 'Valve': false,
-                          });
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: ControlChip(
-                        label: "Valve",
-                        icon: Icons.water,
-                        value: data['Valve'] ?? false,
-                        onChanged: (val) async {
-                          await FirebaseFirestore.instance
-                              .collection('ESP32')
-                              .doc(nanoId)
-                              .update({
-                            'Valve': val,
-                            // เปิด Valve มือ = ปิด Auto กันชนกัน แต่ปิด Valve ไม่ควร
-                            // ไปเปิด Auto กลับให้เอง เพราะผู้ใช้อาจตั้งใจแค่จะหยุด
-                            // รดน้ำ ไม่ได้ต้องการให้ระบบตัดสินใจเปิดวาล์วเองอีก
-                            //
-                            // ต้องเคลียร์ desiredAuto ไปด้วย ไม่งั้นถ้าเปิดใช้
-                            // ตารางเวลาไว้ checkDevices.js รอบถัดไปจะเห็นว่า
-                            // desiredAuto ยังเป็น true แล้วเปิด Auto กลับมาเอง
-                            // ทับการเปิดวาล์วมือที่เพิ่งสั่งไป
-                            if (val == true) 'Auto': false,
-                            if (val == true) 'desiredAuto': false,
-                          });
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                // ถ้าเปิดตารางเวลาไว้ (ของตัวเองหรือของฟาร์มที่สังกัดอยู่ก็ได้)
-                // และผู้ใช้ตั้งใจเปิด Auto แต่ตอนนี้ไม่ใช่ โชว์ตารางเวลาที่
-                // ตั้งไว้เสมอเมื่อเปิดใช้ (ไม่ใช่โชว์แค่ตอนถูกบังคับปิดอยู่)
-                // จะได้เห็นว่าตั้งไว้กี่โมงถึงกี่โมงโดยไม่ต้องกดเข้าไปดู — ถ้า
-                // ตอนนี้กำลังถูกตารางเวลาบังคับปิด Auto อยู่ จะเปลี่ยนสีเป็น
-                // ส้มเน้นให้เห็นชัดว่าทำไม Auto ไม่ทำงาน — อุปกรณ์ที่ไม่ได้
-                // override เอง (ใช้ตารางเวลาของฟาร์มล้วนๆ) เดิมไม่โชว์อะไรเลย
-                // เพราะ field ตารางเวลาอยู่ที่ device_registry ไม่ใช่ตัว
-                // อุปกรณ์เอง ทำให้ดูเหมือนตั้งเวลาทั้งฟาร์มไปแล้ว "ไม่มีอะไร
-                // เกิดขึ้น" ทั้งที่จริงๆทำงานถูกต้องอยู่เบื้องหลัง
-                _ScheduleStatusLabel(data: data),
-                _PlantProfileLabel(
-                  nanoId: nanoId,
-                  data: data,
-                  onTap: widget.onPlantTap,
-                ),
-                const SizedBox(height: 14),
-                const Divider(height: 1),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ActionButton(
-                        icon: Icons.calendar_month,
-                        label: "Calendar",
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => CalendarPage(nanoId: nanoId),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    Expanded(
-                      child: ActionButton(
-                        icon: Icons.show_chart,
-                        label: "Graph",
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => GraphPage(nanoId: nanoId),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    Expanded(
-                      child: ActionButton(
-                        icon: Icons.notifications_outlined,
-                        label: "History",
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => NotificationHistoryPage(
-                                nanoId: nanoId,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    // เดิมซ่อนไว้หลังเมนู "⋮" ทำให้หาไม่เจอ + ดูไม่สมูธเพราะปุ่ม
-                    // เล็กแปลกๆ อยู่ปนกับปุ่มใหญ่ 3 ปุ่ม — ย้ายมาเป็นปุ่มแบบ
-                    // เดียวกันเลย ให้เห็นชัดว่ากดตั้งเวลาได้ พร้อมจุดเขียวบอกว่า
-                    // ตั้งไว้แล้วหรือยัง (อันนี้ยังอยู่ที่การ์ดเหมือนเดิม เพราะ
-                    // เป็นการตั้งค่าเฉพาะอุปกรณ์นี้ — ต่างจาก "ลบอุปกรณ์" ที่ย้าย
-                    // ไปรวมอยู่ในเมนูรวมของหน้าหลักแทนแล้ว)
-                    Expanded(
-                      child: _ScheduleActionButton(nanoId: nanoId, data: data),
-                    ),
-                  ],
+                StatusChip(
+                  isAlert: isAlert,
+                  isOffline: isOffline,
+                  faultType: faultType,
                 ),
               ],
             ),
-          ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              decoration: BoxDecoration(
+                color: Theme.of(context)
+                    .colorScheme
+                    .surfaceContainerHighest
+                    .withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: MoistureGauge(
+                      moisture: data['Moisture'] as num?,
+                      target: currentTarget,
+                      isOffline: isOffline,
+                    ),
+                  ),
+                  const StatDivider(),
+                  Expanded(
+                    child: StatTile(
+                      icon: Icons.flag,
+                      label: "Target",
+                      value: currentTarget.toString(),
+                    ),
+                  ),
+                  const StatDivider(),
+                  Expanded(
+                    child: StatTile(
+                      icon: Icons.schedule,
+                      label: "Time",
+                      value: "${data['Time'] ?? '-'}",
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: ControlChip(
+                    label: "Auto",
+                    icon: Icons.auto_mode,
+                    // ถ้าเปิดใช้ตารางเวลาไว้ โชว์ "ความตั้งใจ" ของผู้ใช้
+                    // (desiredAuto) แทนค่า Auto จริงที่อาจถูกตารางเวลา
+                    // บังคับปิดชั่วคราวอยู่ — ไม่งั้นสวิตช์จะดูเหมือน
+                    // ปิดเองโดยไม่มีเหตุผลตอนอยู่นอกช่วงเวลา
+                    value: (data['scheduleEnabled'] == true)
+                        ? (data['desiredAuto'] ?? data['Auto'] ?? false)
+                        : (data['Auto'] ?? false),
+                    onChanged: (val) async {
+                      final scheduleEnabled = data['scheduleEnabled'] == true;
+
+                      if (!scheduleEnabled) {
+                        // ของเดิม ไม่เปลี่ยนพฤติกรรมเลยถ้าไม่ได้เปิดใช้
+                        // ตารางเวลา
+                        await FirebaseFirestore.instance
+                            .collection('ESP32')
+                            .doc(nanoId)
+                            .update({
+                          'Auto': val,
+                          if (val == true) 'Valve': false,
+                        });
+                        return;
+                      }
+
+                      final scheduleStart = data['scheduleStart'] as String?;
+                      final scheduleEnd = data['scheduleEnd'] as String?;
+                      bool allowedNow = true;
+                      if (scheduleStart != null && scheduleEnd != null) {
+                        allowedNow = resolveScheduleAllowed(
+                          mode: data['scheduleMode'] == 'block'
+                              ? 'block'
+                              : 'allow',
+                          startHHmm: scheduleStart,
+                          endHHmm: scheduleEnd,
+                          exceptEnabled: data['scheduleExceptEnabled'] == true,
+                          exceptStartHHmm:
+                              data['scheduleExceptStart'] as String?,
+                          exceptEndHHmm: data['scheduleExceptEnd'] as String?,
+                        );
+                      }
+                      final effective = val && allowedNow;
+
+                      await FirebaseFirestore.instance
+                          .collection('ESP32')
+                          .doc(nanoId)
+                          .update({
+                        'desiredAuto': val,
+                        'Auto': effective,
+                        if (effective) 'Valve': false,
+                      });
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ControlChip(
+                    label: "Valve",
+                    icon: Icons.water,
+                    value: data['Valve'] ?? false,
+                    onChanged: (val) async {
+                      await FirebaseFirestore.instance
+                          .collection('ESP32')
+                          .doc(nanoId)
+                          .update({
+                        'Valve': val,
+                        // เปิด Valve มือ = ปิด Auto กันชนกัน แต่ปิด Valve ไม่ควร
+                        // ไปเปิด Auto กลับให้เอง เพราะผู้ใช้อาจตั้งใจแค่จะหยุด
+                        // รดน้ำ ไม่ได้ต้องการให้ระบบตัดสินใจเปิดวาล์วเองอีก
+                        //
+                        // ต้องเคลียร์ desiredAuto ไปด้วย ไม่งั้นถ้าเปิดใช้
+                        // ตารางเวลาไว้ checkDevices.js รอบถัดไปจะเห็นว่า
+                        // desiredAuto ยังเป็น true แล้วเปิด Auto กลับมาเอง
+                        // ทับการเปิดวาล์วมือที่เพิ่งสั่งไป
+                        if (val == true) 'Auto': false,
+                        if (val == true) 'desiredAuto': false,
+                      });
+                    },
+                  ),
+                ),
+              ],
+            ),
+            // ถ้าเปิดตารางเวลาไว้ (ของตัวเองหรือของฟาร์มที่สังกัดอยู่ก็ได้)
+            // และผู้ใช้ตั้งใจเปิด Auto แต่ตอนนี้ไม่ใช่ โชว์ตารางเวลาที่
+            // ตั้งไว้เสมอเมื่อเปิดใช้ (ไม่ใช่โชว์แค่ตอนถูกบังคับปิดอยู่)
+            // จะได้เห็นว่าตั้งไว้กี่โมงถึงกี่โมงโดยไม่ต้องกดเข้าไปดู — ถ้า
+            // ตอนนี้กำลังถูกตารางเวลาบังคับปิด Auto อยู่ จะเปลี่ยนสีเป็น
+            // ส้มเน้นให้เห็นชัดว่าทำไม Auto ไม่ทำงาน — อุปกรณ์ที่ไม่ได้
+            // override เอง (ใช้ตารางเวลาของฟาร์มล้วนๆ) เดิมไม่โชว์อะไรเลย
+            // เพราะ field ตารางเวลาอยู่ที่ device_registry ไม่ใช่ตัว
+            // อุปกรณ์เอง ทำให้ดูเหมือนตั้งเวลาทั้งฟาร์มไปแล้ว "ไม่มีอะไร
+            // เกิดขึ้น" ทั้งที่จริงๆทำงานถูกต้องอยู่เบื้องหลัง
+            _ScheduleStatusLabel(data: data),
+            _PlantProfileLabel(
+              nanoId: nanoId,
+              data: data,
+              onTap: widget.onPlantTap,
+            ),
+            const SizedBox(height: 14),
+            const Divider(height: 1),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: ActionButton(
+                    icon: Icons.calendar_month,
+                    label: "Calendar",
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => CalendarPage(nanoId: nanoId),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                Expanded(
+                  child: ActionButton(
+                    icon: Icons.show_chart,
+                    label: "Graph",
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => GraphPage(nanoId: nanoId),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                Expanded(
+                  child: ActionButton(
+                    icon: Icons.notifications_outlined,
+                    label: "History",
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => NotificationHistoryPage(
+                            nanoId: nanoId,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                // เดิมซ่อนไว้หลังเมนู "⋮" ทำให้หาไม่เจอ + ดูไม่สมูธเพราะปุ่ม
+                // เล็กแปลกๆ อยู่ปนกับปุ่มใหญ่ 3 ปุ่ม — ย้ายมาเป็นปุ่มแบบ
+                // เดียวกันเลย ให้เห็นชัดว่ากดตั้งเวลาได้ พร้อมจุดเขียวบอกว่า
+                // ตั้งไว้แล้วหรือยัง (อันนี้ยังอยู่ที่การ์ดเหมือนเดิม เพราะ
+                // เป็นการตั้งค่าเฉพาะอุปกรณ์นี้ — ต่างจาก "ลบอุปกรณ์" ที่ย้าย
+                // ไปรวมอยู่ในเมนูรวมของหน้าหลักแทนแล้ว)
+                Expanded(
+                  child: _ScheduleActionButton(nanoId: nanoId, data: data),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );

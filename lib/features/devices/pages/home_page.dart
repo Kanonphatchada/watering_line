@@ -272,36 +272,71 @@ class _HomePageState extends State<HomePage> {
                         ),
                       )
                     else
-                      GridView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate:
-                            const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 420,
-                          mainAxisExtent: 420,
-                          mainAxisSpacing: 16,
-                          crossAxisSpacing: 16,
-                        ),
-                        itemCount: filteredDocs.length,
-                        itemBuilder: (context, index) {
-                          final doc = filteredDocs[index];
-                          final data = doc.data() as Map<String, dynamic>;
+                      // ไม่ล็อกความสูงการ์ดตายตัวอีกแล้ว — ตอนย่อหน้าจอ/จอโทรศัพท์
+                      // ข้อความไทยตัดบรรทัดเพิ่ม เนื้อหาสูงขึ้น ถ้าล็อกไว้ที่ 420
+                      // จะโดนตัดหรือเพี้ยน เลยจัดเป็นแถวเอง: คำนวณจำนวนคอลัมน์จาก
+                      // ความกว้างจริง (โทรศัพท์ = 1 คอลัมน์) การ์ดในแถวเดียวกันสูง
+                      // เท่ากันตามใบที่สูงที่สุด
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          const gap = 16.0;
+                          const minCardWidth = 340.0;
+                          final available = constraints.maxWidth - 24;
+                          final columns =
+                              ((available + gap) / (minCardWidth + gap))
+                                  .floor()
+                                  .clamp(1, 3);
 
-                          return DeviceCard(
-                            key: ValueKey(doc.id),
-                            nanoId: doc.id,
-                            data: data,
-                            index: index,
-                            onPlantTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => PlantProfilePage(
-                                  docs: docs,
-                                  initialDeviceId: doc.id,
+                          Widget cardAt(int index) {
+                            final doc = filteredDocs[index];
+                            final data = doc.data() as Map<String, dynamic>;
+                            return DeviceCard(
+                              key: ValueKey(doc.id),
+                              nanoId: doc.id,
+                              data: data,
+                              index: index,
+                              onPlantTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => PlantProfilePage(
+                                    docs: docs,
+                                    initialDeviceId: doc.id,
+                                  ),
                                 ),
                               ),
-                            ),
+                            );
+                          }
+
+                          final rows = <Widget>[];
+                          for (var start = 0;
+                              start < filteredDocs.length;
+                              start += columns) {
+                            rows.add(
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: gap),
+                                child: IntrinsicHeight(
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      for (var c = 0; c < columns; c++) ...[
+                                        if (c > 0) const SizedBox(width: gap),
+                                        Expanded(
+                                          child: start + c < filteredDocs.length
+                                              ? cardAt(start + c)
+                                              : const SizedBox.shrink(),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
+
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: Column(children: rows),
                           );
                         },
                       ),
