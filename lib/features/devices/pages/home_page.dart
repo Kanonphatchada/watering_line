@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'add_device_page.dart';
+import 'plant_profile_page.dart';
 import 'schedule_overview_page.dart';
 import '../../profile/pages/profile_page.dart';
 import '../../../shared/widgets/avatar.dart';
@@ -12,6 +13,8 @@ import '../widgets/device_card.dart';
 import '../widgets/home_summary_widgets.dart';
 import '../widgets/recent_activity_card.dart';
 import '../widgets/side_nav_rail.dart';
+import '../widgets/stress_watch_card.dart';
+import '../utils/moisture_utils.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -123,7 +126,7 @@ class _HomePageState extends State<HomePage> {
               final moisture = (data['Moisture'] ?? 0).toDouble();
               final automois = (data['Automois'] ?? 20).toDouble();
               moistureSum += moisture;
-              if (moisture > automois) alertCount++;
+              if (isMoistureAlert(moisture, automois)) alertCount++;
               if (data['offline'] != true) onlineCount++;
             }
             final avgMoisture = moistureSum / docs.length;
@@ -203,6 +206,10 @@ class _HomePageState extends State<HomePage> {
                       totalDevices: docs.length,
                       alertCount: alertCount,
                       avgMoisture: avgMoisture,
+                    ),
+                    StressWatchCard(
+                      docs: docs,
+                      padding: const EdgeInsets.fromLTRB(12, 16, 12, 0),
                     ),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(12, 16, 12, 8),
@@ -286,6 +293,15 @@ class _HomePageState extends State<HomePage> {
                             nanoId: doc.id,
                             data: data,
                             index: index,
+                            onPlantTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => PlantProfilePage(
+                                  docs: docs,
+                                  initialDeviceId: doc.id,
+                                ),
+                              ),
+                            ),
                           );
                         },
                       ),
@@ -310,6 +326,12 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
                 onWeather: () => openRainSkipDialog(context, docs),
+                onPlantProfile: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => PlantProfilePage(docs: docs),
+                  ),
+                ),
                 onRemoveDevice: () => openRemoveDevicePicker(context, docs),
                 onProfile: () => Navigator.push(
                   context,
@@ -491,7 +513,7 @@ class _AlertBell extends StatelessWidget {
               final data = doc.data() as Map<String, dynamic>;
               double moisture = (data['Moisture'] ?? 0).toDouble();
               double automois = (data['Automois'] ?? 20).toDouble();
-              if (moisture > automois) count++;
+              if (isMoistureAlert(moisture, automois)) count++;
             }
           }
 
@@ -547,7 +569,7 @@ class _AlertBell extends StatelessWidget {
           double moisture = (data['Moisture'] ?? 0).toDouble();
           double automois = (data['Automois'] ?? 20).toDouble();
 
-          if (moisture > automois) {
+          if (isMoistureAlert(moisture, automois)) {
             alerts.add(
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),

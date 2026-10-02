@@ -35,7 +35,7 @@ class StatusChip extends StatelessWidget {
     } else if (isAlert) {
       color = Colors.red;
       icon = Icons.warning_amber_rounded;
-      label = "แจ้งเตือน";
+      label = "ดินแห้ง";
     } else {
       color = Colors.green;
       icon = Icons.check_circle;
