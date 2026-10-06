@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
+import '../utils/moisture_utils.dart';
 
 class NotificationHistoryPage extends StatelessWidget {
   final String nanoId;
@@ -282,7 +283,7 @@ class _IncidentTile extends StatelessWidget {
   }
 }
 
-// แท็บเดิม — ประวัติความชื้นเกินค่าที่กำหนด (จาก log ค่าความชื้นตรงๆ)
+// แท็บเดิม — ประวัติความชื้นต่ำกว่าค่าที่กำหนด (ดินแห้ง) (จาก log ค่าความชื้นตรงๆ)
 class _MoistureAlertHistoryTab extends StatelessWidget {
   final String nanoId;
 
@@ -334,7 +335,7 @@ class _MoistureAlertHistoryTab extends StatelessWidget {
 
               double moisture = (data['moisture'] ?? 0).toDouble();
 
-              return moisture > targetMoisture;
+              return isMoistureAlert(moisture, targetMoisture);
             }).toList();
             final totalAlerts = alerts.length;
 
