@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/moisture_utils.dart';
 
 class MoistureGauge extends StatelessWidget {
   final num? moisture;
@@ -15,7 +16,7 @@ class MoistureGauge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final value = moisture?.toDouble();
-    final isAlert = value != null && value > target;
+    final isAlert = value != null && isMoistureAlert(value, target);
     final color = isOffline
         ? Colors.grey.shade500
         : (isAlert ? Colors.red : const Color(0xFF2E7D32));

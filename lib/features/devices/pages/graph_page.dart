@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:shimmer/shimmer.dart';
+import '../utils/moisture_utils.dart';
 
 class GraphPage extends StatefulWidget {
   final String nanoId;
@@ -158,7 +159,8 @@ class _GraphPageState extends State<GraphPage> {
                       _LegendSwatch(color: Colors.blue, label: "ค่าที่กำหนด"),
                       _LegendSwatch(color: Colors.green, label: "ปกติ"),
                       _LegendSwatch(
-                          color: Colors.red, label: "เกินค่าที่กำหนด"),
+                          color: Colors.red,
+                          label: "ต่ำกว่าค่าที่กำหนด (ดินแห้ง)"),
                     ],
                   ),
                 ],
@@ -216,9 +218,10 @@ class _GraphPageState extends State<GraphPage> {
                                   BarChartRodData(
                                     toY: spot.y,
                                     width: spots.length > 20 ? 6 : 12,
-                                    color: spot.y > targetMoisture
-                                        ? Colors.red
-                                        : Colors.green,
+                                    color:
+                                        isMoistureAlert(spot.y, targetMoisture)
+                                            ? Colors.red
+                                            : Colors.green,
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                 ],
