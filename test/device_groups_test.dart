@@ -78,7 +78,8 @@ void main() {
 
   test('ย้ายสมาชิก/เปลี่ยนชื่อ ไม่ทำให้ไอคอนและสีหาย', () {
     final styled = restyleGroup([a, b], 'a', iconKey: 'herb', colorIndex: 3);
-    final moved = setGroupMembers(renameGroup(styled, 'a', 'โหรพา'), 'a', ['n1']);
+    final moved =
+        setGroupMembers(renameGroup(styled, 'a', 'โหรพา'), 'a', ['n1']);
     expect(moved.first.iconKey, 'herb');
     expect(moved.first.colorIndex, 3);
   });
@@ -95,7 +96,11 @@ void main() {
       final s = computeGroupStats([
         {'Moisture': 10, 'Automois': 20}, // แห้ง
         {'Moisture': 40, 'Automois': 20}, // ปกติ
-        {'Moisture': 5, 'Automois': 20, 'offline': true}, // แห้ง+ออฟไลน์ = 1 ตัว
+        {
+          'Moisture': 5,
+          'Automois': 20,
+          'offline': true
+        }, // แห้ง+ออฟไลน์ = 1 ตัว
         {'Moisture': 50, 'faultType': 'sensor_error'}, // ผิดปกติ
       ]);
       expect(s.count, 4);

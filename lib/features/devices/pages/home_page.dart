@@ -324,7 +324,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-
   void _openGroups(List<QueryDocumentSnapshot> docs) => Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => DeviceGroupsPage(docs: docs)),
@@ -466,10 +465,10 @@ class _HomePageState extends State<HomePage> {
             builder: (context, constraints) {
               const gap = 12.0;
               const minCardWidth = 270.0;
-              final columns = ((constraints.maxWidth + gap) /
-                      (minCardWidth + gap))
-                  .floor()
-                  .clamp(1, 4);
+              final columns =
+                  ((constraints.maxWidth + gap) / (minCardWidth + gap))
+                      .floor()
+                      .clamp(1, 4);
               final cardWidth =
                   (constraints.maxWidth - gap * (columns - 1)) / columns;
               return Wrap(

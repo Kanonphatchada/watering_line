@@ -72,7 +72,9 @@ class GroupDetailPage extends StatelessWidget {
                 ? allDocs
                     .where((d) => groupOfDevice(groups, d.id) == null)
                     .toList()
-                : allDocs.where((d) => group!.deviceIds.contains(d.id)).toList();
+                : allDocs
+                    .where((d) => group!.deviceIds.contains(d.id))
+                    .toList();
             final stats = computeGroupStats([
               for (final d in members) d.data() as Map<String, dynamic>,
             ]);
