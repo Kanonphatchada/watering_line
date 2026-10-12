@@ -8,6 +8,7 @@ class SideNavRail extends StatefulWidget {
   final VoidCallback onSchedule;
   final VoidCallback onWeather;
   final VoidCallback onPlantProfile;
+  final VoidCallback onGroups;
   final VoidCallback onRemoveDevice;
   final VoidCallback onProfile;
 
@@ -17,6 +18,7 @@ class SideNavRail extends StatefulWidget {
     required this.onSchedule,
     required this.onWeather,
     required this.onPlantProfile,
+    required this.onGroups,
     required this.onRemoveDevice,
     required this.onProfile,
   });
@@ -76,6 +78,12 @@ class _SideNavRailState extends State<SideNavRail> {
                   icon: Icons.local_florist_outlined,
                   tooltip: "ชนิดพืช",
                   onTap: widget.onPlantProfile,
+                ),
+                const SizedBox(height: 4),
+                _NavIcon(
+                  icon: Icons.folder_copy_outlined,
+                  tooltip: "กลุ่มอุปกรณ์",
+                  onTap: widget.onGroups,
                 ),
                 const SizedBox(height: 4),
                 _NavIcon(

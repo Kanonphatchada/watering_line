@@ -151,7 +151,7 @@ Future<void> openRemoveDevicePicker(
                               leading: const Icon(Icons.sensors),
                               title: Text(d.id),
                               subtitle: data['groupId'] != null
-                                  ? Text("กลุ่ม: ${data['groupId']}")
+                                  ? Text("ฟาร์ม: ${data['groupId']}")
                                   : null,
                               trailing: const Icon(
                                 Icons.delete_outline,

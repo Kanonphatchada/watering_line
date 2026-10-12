@@ -2,13 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'add_device_page.dart';
+import 'device_groups_page.dart';
+import 'group_detail_page.dart';
 import 'plant_profile_page.dart';
 import 'schedule_page.dart';
 import 'weather_page.dart';
 import '../../profile/pages/profile_page.dart';
 import '../../../shared/widgets/avatar.dart';
+import '../services/device_groups.dart';
 import '../services/remove_device.dart';
-import '../widgets/device_card.dart';
+import '../widgets/device_grid.dart';
+import '../widgets/group_card.dart';
 import '../widgets/home_summary_widgets.dart';
 import '../widgets/recent_activity_card.dart';
 import '../widgets/side_nav_rail.dart';
@@ -211,6 +215,18 @@ class _HomePageState extends State<HomePage> {
                       docs: docs,
                       padding: const EdgeInsets.fromLTRB(12, 16, 12, 0),
                     ),
+                    StreamBuilder<List<DeviceGroup>>(
+                      stream: watchDeviceGroups(uid),
+                      builder: (context, groupSnap) => _devicesSection(
+                        context,
+                        allDocs: docs,
+                        searchResults: query.isEmpty ? null : filteredDocs,
+                        groups: pruneMissingDevices(
+                          groupSnap.data ?? const [],
+                          docs.map((d) => d.id).toSet(),
+                        ),
+                      ),
+                    ),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(12, 16, 12, 8),
                       child: LayoutBuilder(
@@ -247,99 +263,6 @@ class _HomePageState extends State<HomePage> {
                         },
                       ),
                     ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                      child: Text(
-                        "อุปกรณ์ทั้งหมด",
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                          color: Theme.of(context).textTheme.bodySmall?.color,
-                        ),
-                      ),
-                    ),
-                    if (filteredDocs.isEmpty)
-                      Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Text(
-                            "ไม่พบอุปกรณ์ที่ตรงกับ \"$_searchQuery\"",
-                            style: TextStyle(
-                              color:
-                                  Theme.of(context).textTheme.bodySmall?.color,
-                            ),
-                          ),
-                        ),
-                      )
-                    else
-                      // ไม่ล็อกความสูงการ์ดตายตัวอีกแล้ว — ตอนย่อหน้าจอ/จอโทรศัพท์
-                      // ข้อความไทยตัดบรรทัดเพิ่ม เนื้อหาสูงขึ้น ถ้าล็อกไว้ที่ 420
-                      // จะโดนตัดหรือเพี้ยน เลยจัดเป็นแถวเอง: คำนวณจำนวนคอลัมน์จาก
-                      // ความกว้างจริง (โทรศัพท์ = 1 คอลัมน์) การ์ดในแถวเดียวกันสูง
-                      // เท่ากันตามใบที่สูงที่สุด
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          const gap = 16.0;
-                          const minCardWidth = 340.0;
-                          final available = constraints.maxWidth - 24;
-                          final columns =
-                              ((available + gap) / (minCardWidth + gap))
-                                  .floor()
-                                  .clamp(1, 3);
-
-                          Widget cardAt(int index) {
-                            final doc = filteredDocs[index];
-                            final data = doc.data() as Map<String, dynamic>;
-                            return DeviceCard(
-                              key: ValueKey(doc.id),
-                              nanoId: doc.id,
-                              data: data,
-                              index: index,
-                              onPlantTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => PlantProfilePage(
-                                    docs: docs,
-                                    initialDeviceId: doc.id,
-                                  ),
-                                ),
-                              ),
-                            );
-                          }
-
-                          final rows = <Widget>[];
-                          for (var start = 0;
-                              start < filteredDocs.length;
-                              start += columns) {
-                            rows.add(
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: gap),
-                                child: IntrinsicHeight(
-                                  child: Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      for (var c = 0; c < columns; c++) ...[
-                                        if (c > 0) const SizedBox(width: gap),
-                                        Expanded(
-                                          child: start + c < filteredDocs.length
-                                              ? cardAt(start + c)
-                                              : const SizedBox.shrink(),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          }
-
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: Column(children: rows),
-                          );
-                        },
-                      ),
                   ],
                 ),
               ),
@@ -367,6 +290,7 @@ class _HomePageState extends State<HomePage> {
                     builder: (_) => PlantProfilePage(docs: docs),
                   ),
                 ),
+                onGroups: () => _openGroups(docs),
                 onRemoveDevice: () => openRemoveDevicePicker(context, docs),
                 onProfile: () => Navigator.push(
                   context,
@@ -397,6 +321,168 @@ class _HomePageState extends State<HomePage> {
           );
         },
       ),
+    );
+  }
+
+
+  void _openGroups(List<QueryDocumentSnapshot> docs) => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => DeviceGroupsPage(docs: docs)),
+      );
+
+  void _openGroupDetail(String groupId) => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => GroupDetailPage(groupId: groupId)),
+      );
+
+  // ส่วนล่างของแดชบอร์ด — มีกลุ่มแล้วแสดงเป็น "การ์ดกลุ่ม" (กดเข้าไปดูอุปกรณ์
+  // ในกลุ่ม) แทนที่จะกองการ์ดอุปกรณ์ทุกตัวไว้หน้าเดียวจนรก; ยังไม่มีกลุ่มก็
+  // แสดงกริดอุปกรณ์เหมือนเดิม พร้อมชวนให้สร้างกลุ่ม; ตอนค้นหาแสดงผลลัพธ์เป็น
+  // การ์ดอุปกรณ์ตรงๆ เพราะผู้ใช้ตั้งใจหาตัวนั้นอยู่
+  Widget _devicesSection(
+    BuildContext context, {
+    required List<QueryDocumentSnapshot> allDocs,
+    required List<QueryDocumentSnapshot>? searchResults,
+    required List<DeviceGroup> groups,
+  }) {
+    final muted = Theme.of(context).textTheme.bodySmall?.color;
+
+    Widget header(String title, {List<Widget> actions = const []}) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                  color: muted,
+                ),
+              ),
+            ),
+            ...actions,
+          ],
+        ),
+      );
+    }
+
+    if (searchResults != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          header("ผลการค้นหา (${searchResults.length})"),
+          if (searchResults.isEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  "ไม่พบอุปกรณ์ที่ตรงกับ \"$_searchQuery\"",
+                  style: TextStyle(color: muted),
+                ),
+              ),
+            )
+          else
+            DeviceGrid(docs: searchResults, allDocs: allDocs),
+        ],
+      );
+    }
+
+    if (groups.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          header(
+            "อุปกรณ์ทั้งหมด",
+            actions: [
+              TextButton.icon(
+                onPressed: () =>
+                    openGroupEditor(context, docs: allDocs, groups: groups),
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const Text("สร้างกลุ่ม"),
+              ),
+            ],
+          ),
+          DeviceGrid(docs: allDocs, allDocs: allDocs),
+        ],
+      );
+    }
+
+    final memberOf = <String, String>{
+      for (final g in groups)
+        for (final id in g.deviceIds) id: g.id,
+    };
+    GroupStats statsOf(Iterable<QueryDocumentSnapshot> members) =>
+        computeGroupStats([
+          for (final d in members) d.data() as Map<String, dynamic>,
+        ]);
+
+    final ungrouped =
+        allDocs.where((d) => !memberOf.containsKey(d.id)).toList();
+
+    final cards = <Widget>[
+      for (final g in groups)
+        GroupCard(
+          name: g.name,
+          iconKey: g.iconKey,
+          colorIndex: g.colorIndex,
+          stats: statsOf(allDocs.where((d) => memberOf[d.id] == g.id)),
+          onTap: () => _openGroupDetail(g.id),
+        ),
+      if (ungrouped.isNotEmpty)
+        GroupCard(
+          name: "ไม่ได้จัดกลุ่ม",
+          iconKey: 'house',
+          colorIndex: 7,
+          stats: statsOf(ungrouped),
+          onTap: () => _openGroupDetail(ungroupedGroupId),
+        ),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        header(
+          "กลุ่มของฉัน (${groups.length})",
+          actions: [
+            FilledButton.tonalIcon(
+              onPressed: () =>
+                  openGroupEditor(context, docs: allDocs, groups: groups),
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text("เพิ่มกลุ่ม"),
+            ),
+            const SizedBox(width: 4),
+            IconButton(
+              tooltip: "จัดการกลุ่ม",
+              icon: const Icon(Icons.tune_rounded),
+              onPressed: () => _openGroups(allDocs),
+            ),
+          ],
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              const gap = 12.0;
+              const minCardWidth = 270.0;
+              final columns = ((constraints.maxWidth + gap) /
+                      (minCardWidth + gap))
+                  .floor()
+                  .clamp(1, 4);
+              final cardWidth =
+                  (constraints.maxWidth - gap * (columns - 1)) / columns;
+              return Wrap(
+                spacing: gap,
+                runSpacing: gap,
+                children: [
+                  for (final c in cards) SizedBox(width: cardWidth, child: c),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

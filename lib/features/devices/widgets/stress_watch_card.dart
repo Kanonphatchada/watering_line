@@ -78,7 +78,7 @@ class StressWatchCard extends StatelessWidget {
               ),
             ),
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -89,21 +89,21 @@ class StressWatchCard extends StatelessWidget {
                             ? Icons.water_drop_outlined
                             : Icons.warning_amber_rounded,
                         color: accent,
-                        size: 20,
+                        size: 18,
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                       const Expanded(
                         child: Text(
                           "ต้นที่กำลังงดน้ำ",
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
-                            fontSize: 15,
+                            fontSize: 14,
                           ),
                         ),
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
+                            horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
                           color: accent.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(20),
@@ -123,9 +123,9 @@ class StressWatchCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 6),
                   for (final (i, g) in rows.indexed) ...[
-                    if (i > 0) const Divider(height: 20),
+                    if (i > 0) const Divider(height: 12),
                     _StressRow(
                       group: g,
                       onTap: () => Navigator.push(
@@ -153,6 +153,9 @@ class _Group {
   _Group(this.status);
 }
 
+// แถวเดียวกะทัดรัด: ผลไม้·ช่วง + แถบความคืบหน้า + วันที่ x/y แล้วบรรทัดเล็กๆ
+// ใต้นั้นบอกข้อความสถานะ (แต่ละแถวสูงแค่สองบรรทัด) — รายชื่ออุปกรณ์ไม่โชว์ใน
+// การ์ดแล้ว เหลือแค่จำนวน เพราะรายละเอียดอยู่ในหน้า "ชนิดพืช" อยู่แล้ว
 class _StressRow extends StatelessWidget {
   final _Group group;
   final VoidCallback onTap;
@@ -185,55 +188,57 @@ class _StressRow extends StatelessWidget {
           children: [
             Row(
               children: [
-                FruitIcon(size: 18, color: c),
+                FruitIcon(size: 16, color: c),
                 const SizedBox(width: 6),
-                Expanded(
+                Flexible(
+                  flex: 3,
                   child: Text(
-                    "${s.fruit.label} · ${s.stage.label}",
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                ),
-                Text(
-                  "วันที่ ${s.dayNumber}/${s.plannedDays}",
-                  style: TextStyle(fontWeight: FontWeight.w800, color: c),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              group.devices.join(', '),
-              style: TextStyle(fontSize: 12, color: muted),
-            ),
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: LinearProgressIndicator(
-                value: progress,
-                minHeight: 8,
-                color: c,
-                backgroundColor: c.withValues(alpha: 0.15),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    message,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: s.level == StressLevel.ok
-                          ? FontWeight.w500
-                          : FontWeight.w700,
-                      color: s.level == StressLevel.ok ? muted : c,
+                    "${s.fruit.label} · ${s.stage.label}"
+                    "${group.devices.length > 1 ? ' (${group.devices.length} ตัว)' : ''}",
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
                     ),
                   ),
                 ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 4,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 6,
+                      color: c,
+                      backgroundColor: c.withValues(alpha: 0.15),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
                 Text(
-                  "แนะนำ ${s.stage.minDays}–${s.stage.maxDays} วัน",
-                  style: TextStyle(fontSize: 11, color: muted),
+                  "${s.dayNumber}/${s.plannedDays} วัน",
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
+                    color: c,
+                  ),
                 ),
               ],
+            ),
+            Padding(
+              padding: const EdgeInsets.only(left: 22, top: 2),
+              child: Text(
+                message,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: s.level == StressLevel.ok
+                      ? FontWeight.w500
+                      : FontWeight.w700,
+                  color: s.level == StressLevel.ok ? muted : c,
+                ),
+              ),
             ),
           ],
         ),
