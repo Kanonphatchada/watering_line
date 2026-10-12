@@ -1,0 +1,120 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 🔥 ------------------ [ของใหม่] ------------------
+    // ใช้สำหรับระบบ claim device (ผูก user กับ ESP32)
+    match /device_registry/{deviceId} {
+
+      // user login แล้วอ่านได้
+      allow read: if request.auth != null;
+
+      // อนุญาตให้ claim ได้ครั้งเดียว (ownerUid ต้องเป็น null ก่อน)
+      allow update: if request.auth != null && (
+        (resource.data.ownerUid == null
+          && request.resource.data.ownerUid == request.auth.uid)  // เดิม (claim)
+
+        ||
+
+        // 🔥 [เพิ่มฟีเจอร์ตั้งเวลารดน้ำทั้งกลุ่ม/ฟาร์ม] ให้เจ้าของกลุ่มตั้ง
+        // ตารางเวลาที่ใช้กับทุกอุปกรณ์ในกลุ่มได้ ไม่กระทบ claim clause เดิมเลย
+        // 🔥 [เพิ่มฟีเจอร์ข้ามรดน้ำถ้าฝนจะตก] เพิ่ม rainSkipEnabled/farmLat/
+        // farmLon เข้าลิสต์เดียวกัน (additive เหมือนเดิม ไม่กระทบ clause อื่น)
+        (resource.data.ownerUid == request.auth.uid &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+           'scheduleEnabled', 'scheduleMode', 'scheduleStart', 'scheduleEnd',
+           'scheduleExceptEnabled', 'scheduleExceptStart', 'scheduleExceptEnd',
+           'rainSkipEnabled', 'farmLat', 'farmLon'
+         ]))
+      );
+
+      // ❌ ห้าม client สร้าง/ลบเอง
+      allow create, delete: if false;
+    }
+
+  //----------------ของเดิมของบูล โค้ดเก่าตอน 12.39-------------
+
+    // --- 1. ฟังก์ชันช่วยเหลือ (Helper Functions) ---
+
+    function isESP32() {
+      return request.auth != null && request.auth.token.email == "project@gg.com";
+    }
+
+    function isNodeOwner(nanoId) {
+      return request.auth != null &&
+             request.auth.uid == get(/databases/$(database)/documents/ESP32/$(nanoId)).data.uid;
+    }
+
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    match /ESP32/{nanoId} {
+
+      // 🔥 [แก้ไขตรงนี้เท่านั้น]
+      // เพิ่ม || true เพื่อให้ user ที่ login อ่านได้
+      // ❗ ไม่ลบ logic เดิม เพื่อไม่กระทบ ESP32
+
+      allow read: if request.auth != null && (
+        request.auth.uid == resource.data.uid   // ของเดิม
+        || isESP32()                            // ของเดิม
+        || true                                 // 🔥 เพิ่มใหม่
+      );
+
+      // ของเดิมทั้งหมด (ไม่แตะ)
+      allow create: if isESP32();
+
+      allow update: if request.auth != null && (
+        (request.auth.uid == resource.data.uid &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+           'Auto', 'Automois', 'Valve',
+           // 🔥 [เพิ่มฟีเจอร์ตั้งเวลารดน้ำ] ให้เจ้าของอุปกรณ์ตั้งค่าตาราง
+           // เวลาเองได้ — ไม่กระทบ clause อื่นเลย
+           'scheduleEnabled', 'scheduleMode', 'scheduleStart', 'scheduleEnd', 'desiredAuto',
+           // 🔥 [เพิ่มฟีเจอร์ override ตารางเวลาเฉพาะอุปกรณ์] แยกจากค่าตั้งเวลา
+           // ของกลุ่ม เผื่อบางตัวต้องการเวลาไม่เหมือนกลุ่ม
+           'scheduleOverride',
+           // 🔥 [เพิ่มฟีเจอร์ช่วงห้ามรดพิเศษซ้อนในช่วงหลัก] เช่น รดได้
+           // 08:00-18:00 แต่ห้ามรด 12:00-14:00 พร้อมกัน
+           'scheduleExceptEnabled', 'scheduleExceptStart', 'scheduleExceptEnd'
+         ]))
+
+        ||
+        // 🔥 [CLAIM DEVICE] อนุญาตให้ set uid ครั้งแรก แก้เพิ่มเติมส่าสุด 3/4/69 14:49 ให้ระบบเพิ่ม uid
+        (
+          (
+            !('uid' in resource.data) || resource.data.uid == null
+          ) &&
+          request.resource.data.uid == request.auth.uid
+        )
+
+        ||
+        //------------
+
+        (isESP32() &&
+         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['Auto', 'Automois', 'Valve', 'uid']))
+      );
+    }
+
+    match /ESP32/{nanoId}/Logs/{logId} {
+      // 🔥 [แก้ไขจุดที่มีปัญหา]
+      // อนุญาตให้ทั้ง เจ้าของเครื่อง (isNodeOwner) และ ตัวบอร์ด (isESP32) เข้าถึง Log ได้
+      allow read: if request.auth != null && (isNodeOwner(nanoId) || isESP32());
+
+      // อนุญาตให้ ESP32 สร้าง Log ได้
+      allow create: if isESP32();
+
+      allow update, delete: if false;
+    }
+
+    // 🔥 ------------------ [ของใหม่] ------------------
+    // ประวัติ incident (ขาดการติดต่อ/วาล์วเสีย/firmware error) ที่ backend
+    // (checkDevices.js บน Render) เขียนผ่าน Admin SDK อยู่แล้ว — Admin SDK
+    // ไม่แคร์ rule พวกนี้เลย เพิ่ม rule นี้แค่เพื่อให้หน้าเว็บ (client) ของ
+    // เจ้าของอุปกรณ์เปิดดูประวัติของตัวเองได้ ไม่เปิดให้ client เขียนเอง
+    match /ESP32/{nanoId}/Incidents/{incidentId} {
+      allow read: if isNodeOwner(nanoId);
+      allow create, update, delete: if false;
+    }
+  }
+}

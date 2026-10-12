@@ -1,0 +1,96 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ───────────────────────────────────────────────────────────────────
+    // ชุดกฎที่อุดช่องโหว่ 5 ข้อของชุดเดิม (ดู rules_test/baseline.test.js ที่เก็บ
+    // พฤติกรรมเดิมไว้เทียบ) โดย "ไม่แตะ" ข้อกำหนดของบอร์ด ESP32 เลย:
+    //   - isESP32() และ clause ของบอร์ดใน ESP32/{nanoId} เหมือนเดิมทุกตัวอักษร
+    //   - ทุกการอ้าง resource.data.uid / ownerUid ใช้ .get('...', null) แทนการ
+    //     อ้างตรงๆ เพราะอ้างฟิลด์ที่ไม่มีอยู่แล้วกฎจะ error (ไม่ใช่ false) ซึ่งเป็น
+    //     สาเหตุที่เคยทำให้บอร์ดต่อไม่ติดตอนแก้กฎรอบก่อน
+    //   - การ "เชื่อมอุปกรณ์" (claim) ย้ายไปทำที่ backend ด้วย Admin SDK
+    //     (ตรวจรหัสลับฝั่งเซิร์ฟเวอร์) client เขียน uid/ownerUid เองไม่ได้อีก
+    // ───────────────────────────────────────────────────────────────────
+
+    // ข้อมูลฟาร์ม/กลุ่มอุปกรณ์ (มีรหัสลับ secret สำหรับเชื่อมอุปกรณ์) — อ่านได้
+    // เฉพาะเจ้าของ รหัสลับจึงไม่รั่วให้ผู้ใช้อื่นอีกต่อไป
+    // หมายเหตุ: กฎไม่ใช่ตัวกรอง — คำค้น (query) ต้องมี where ownerUid == uid ด้วย
+    match /device_registry/{deviceId} {
+
+      allow read: if request.auth != null
+        && resource.data.get('ownerUid', null) == request.auth.uid;
+
+      // เจ้าของตั้งค่าระดับฟาร์มได้เฉพาะฟิลด์เหล่านี้ (เหมือนชุดเดิม) —
+      // ไม่มี clause "claim" แล้ว (ownerUid เปลี่ยนได้เฉพาะผ่าน backend)
+      allow update: if request.auth != null
+        && resource.data.get('ownerUid', null) == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'scheduleEnabled', 'scheduleMode', 'scheduleStart', 'scheduleEnd',
+          'scheduleExceptEnabled', 'scheduleExceptStart', 'scheduleExceptEnd',
+          'rainSkipEnabled', 'farmLat', 'farmLon'
+        ]);
+
+      // ❌ ห้าม client สร้าง/ลบเอง
+      allow create, delete: if false;
+    }
+
+    // --- ฟังก์ชันช่วยเหลือ ---
+
+    function isESP32() {
+      return request.auth != null && request.auth.token.email == "project@gg.com";
+    }
+
+    function isNodeOwner(nanoId) {
+      return request.auth != null &&
+             request.auth.uid == get(/databases/$(database)/documents/ESP32/$(nanoId)).data.get('uid', null);
+    }
+
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    match /ESP32/{nanoId} {
+
+      // เจ้าของอ่านอุปกรณ์ตัวเอง และบอร์ด (isESP32) อ่านได้ทุกตัว — เอา
+      // "|| true" เดิมออกแล้ว ผู้ใช้อื่นดูข้อมูลอุปกรณ์ของเราไม่ได้อีก
+      allow read: if request.auth != null && (
+        request.auth.uid == resource.data.get('uid', null)
+        || isESP32()
+      );
+
+      allow create: if isESP32();
+
+      allow update: if request.auth != null && (
+        (request.auth.uid == resource.data.get('uid', null) &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+           'Auto', 'Automois', 'Valve',
+           'scheduleEnabled', 'scheduleMode', 'scheduleStart', 'scheduleEnd', 'desiredAuto',
+           'scheduleOverride',
+           'scheduleExceptEnabled', 'scheduleExceptStart', 'scheduleExceptEnd'
+         ]))
+
+        // ❌ ตัด clause "[CLAIM DEVICE] ตั้ง uid ครั้งแรกเอง" ออกแล้ว — เดิมใครก็
+        // จับอุปกรณ์ที่ยังไม่มีเจ้าของเป็นของตัวเองได้โดยไม่ต้องใช้รหัสลับ
+        // ตอนนี้ backend (Admin SDK) เป็นคนผูก uid หลังตรวจรหัสลับแล้วเท่านั้น
+
+        ||
+        // clause ของบอร์ด — คงเดิมทุกตัวอักษร
+        (isESP32() &&
+         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['Auto', 'Automois', 'Valve', 'uid']))
+      );
+    }
+
+    match /ESP32/{nanoId}/Logs/{logId} {
+      allow read: if request.auth != null && (isNodeOwner(nanoId) || isESP32());
+      allow create: if isESP32();
+      allow update, delete: if false;
+    }
+
+    // ประวัติ incident ที่ backend เขียนผ่าน Admin SDK — client แค่เจ้าของอ่านได้
+    match /ESP32/{nanoId}/Incidents/{incidentId} {
+      allow read: if isNodeOwner(nanoId);
+      allow create, update, delete: if false;
+    }
+  }
+}
