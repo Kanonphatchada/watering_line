@@ -1,6 +1,8 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
 import '../../../main.dart';
 
 class AddDevicePage extends StatefulWidget {
@@ -75,111 +77,72 @@ class _AddDevicePageState extends State<AddDevicePage>
     );
   }
 
+  // เชื่อมอุปกรณ์ผ่าน backend (/claim-device) แทนที่จะอ่านรหัสลับและตั้ง uid เอง
+  // ฝั่งแอป — รหัสลับไม่ออกจากเซิร์ฟเวอร์อีก และ Firestore rules ก็ไม่เปิดให้
+  // client เขียน uid/ownerUid เองแล้ว (ปิดช่องโหว่ที่ใครก็ผูกอุปกรณ์ได้โดยไม่ต้อง
+  // ใช้รหัส) ผู้เรียกยืนยันตัวตนด้วย Firebase ID token
   Future<void> claimDevice() async {
     if (isLoading) return; // 🔥 กันกดรัว
+
+    final deviceId = deviceIdController.text.trim();
+    final secret = secretController.text.trim();
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    if (deviceId.isEmpty || secret.isEmpty) {
+      await showPopup("กรอก Device ID และรหัสผ่านให้ครบ", isError: true);
+      return;
+    }
 
     setState(() {
       isLoading = true;
     });
     FocusScope.of(context).unfocus(); // 🔥 ซ่อน keyboard
 
-    final deviceId = deviceIdController.text.trim();
-    final secret = secretController.text.trim();
-    final uid = FirebaseAuth.instance.currentUser!.uid;
+    // backend เป็น Render free tier — ถ้าไม่มีใครเรียกนานๆ จะ sleep เอง ตื่น
+    // ครั้งแรก (cold start) ใช้เวลาได้ถึง 30-60 วิ จึงรอได้นานและมี isLoading
+    // โชว์ให้เห็นว่ากำลังทำงานอยู่
+    String? errorMessage;
+    try {
+      final idToken = await user.getIdToken();
+      final res = await http
+          .post(
+            Uri.parse("https://line-auth-server.onrender.com/claim-device"),
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer $idToken",
+            },
+            body: jsonEncode({"deviceId": deviceId, "secret": secret}),
+          )
+          .timeout(const Duration(seconds: 60));
 
-    final docRef =
-        FirebaseFirestore.instance.collection('device_registry').doc(deviceId);
-
-    print("STEP 1: start");
-
-    final doc = await docRef.get();
-
-    if (!doc.exists) {
-      print("STEP X: ไม่เจอ");
-
-      await showPopup("ไม่เจออุปกรณ์", isError: true); // 🔥 await
-
-      setState(() {
-        isLoading = false;
-      });
-      return;
-    }
-
-    final data = doc.data()!;
-    print("STEP 2: เจอ doc");
-
-    if (data['secret'] != secret) {
-      print("STEP X: secret ผิด");
-
-      await showPopup("รหัสผ่านไม่ถูกต้อง", isError: true);
-
-      setState(() {
-        isLoading = false;
-      });
-      return;
-    }
-
-    // เดิมเช็คแค่ "มีเจ้าของหรือยัง" บล็อกแม้เจ้าของจะเป็นคนเดิม (ตัวเอง) ก็
-    // ตาม ทำให้เพิ่มเซนเซอร์ตัวใหม่เข้ากลุ่ม/ฟาร์มที่ตัวเองเป็นเจ้าของอยู่
-    // แล้วไม่ได้เลย — แก้ให้อนุญาตถ้าเจ้าของเดิมคือ uid ตัวเองด้วย (กรณีซื้อ
-    // เซนเซอร์เพิ่มเข้าฟาร์มเดิม) บล็อกเฉพาะตอนเป็นของคนอื่นจริงๆ เท่านั้น
-    final alreadyOwnedBySomeoneElse =
-        data['ownerUid'] != null && data['ownerUid'] != uid;
-
-    if (alreadyOwnedBySomeoneElse) {
-      print("STEP X: ถูกใช้แล้ว");
-
-      await showPopup("อุปกรณ์ถูกใช้แล้ว", isError: true);
-
-      setState(() {
-        isLoading = false;
-      });
-      return;
-    }
-
-    print("STEP 3: ผ่านทุกเงื่อนไข");
-
-    // 🔥 หา nano ทั้งหมดที่ groupId ตรงกัน
-    final snapshot = await FirebaseFirestore.instance
-        .collection('ESP32')
-        .where('groupId', isEqualTo: deviceId)
-        .get();
-
-    print("เจอ nano: ${snapshot.docs.length}");
-
-    // 🔥 ผูก ownerUid ของ device_registry + uid ของทุก nano ในคำสั่งเดียว (atomic)
-    // กันกรณีเน็ตหลุดกลางทาง ที่ทำให้ device ถูก mark ว่า "ถูกใช้แล้ว"
-    // ทั้งที่ ESP32 บางตัวยังไม่ถูกผูก uid จริง
-    //
-    // สำคัญ: ใส่แค่ document ที่ "ยังไม่ตรง" ลงใน batch เท่านั้น — Firestore
-    // rule อนุญาตให้ตั้ง ownerUid/uid ได้เฉพาะตอนที่ยังเป็น null/ไม่มีอยู่
-    // เท่านั้น ถ้าใส่ document ที่ตั้งค่าตรงอยู่แล้ว (เช่น Nano1-3 ตอนเพิ่ม
-    // Nano4 เข้ากลุ่มเดิม) เข้าไปเขียนซ้ำ จะโดน rule ปฏิเสธ แล้วทำให้ batch
-    // ทั้งก้อนพังไปด้วย (batch เป็น all-or-nothing)
-    final batch = FirebaseFirestore.instance.batch();
-    if (data['ownerUid'] == null) {
-      batch.update(docRef, {'ownerUid': uid});
-    }
-    for (final nanoDoc in snapshot.docs) {
-      final nanoData = nanoDoc.data();
-      if (nanoData['uid'] != uid) {
-        // ผูก uid ให้ พร้อมเติมค่าเริ่มต้นของฟีลด์ที่ยังไม่มี (เช่นตอนสร้าง
-        // ESP32 doc เองใหม่ผ่าน Console แล้วมีแค่ groupId) ให้ครบพอจะแสดงผล
-        // ในหน้าเว็บได้ปกติ — เติมเฉพาะฟีลด์ที่ "ไม่มีอยู่ก่อน" เท่านั้น กัน
-        // เผลอทับค่าจริงจากฮาร์ดแวร์ของอุปกรณ์ที่ใช้งานอยู่แล้ว (เช่น
-        // Nano1-3) ด้วยค่า default
-        final update = <String, dynamic>{'uid': uid};
-        if (!nanoData.containsKey('Moisture')) update['Moisture'] = 0;
-        if (!nanoData.containsKey('Automois')) update['Automois'] = 20;
-        if (!nanoData.containsKey('Valve')) update['Valve'] = false;
-        batch.update(nanoDoc.reference, update);
+      if (res.statusCode != 200) {
+        errorMessage = switch (res.statusCode) {
+          404 => "ไม่เจออุปกรณ์",
+          403 => "รหัสผ่านไม่ถูกต้อง",
+          409 => "อุปกรณ์ถูกใช้แล้ว",
+          429 => "ลองรหัสผิดหลายครั้งเกินไป รอสักครู่แล้วลองใหม่",
+          _ => "เชื่อมต่ออุปกรณ์ไม่สำเร็จ ลองใหม่อีกครั้ง",
+        };
       }
+    } on TimeoutException {
+      errorMessage = "เชื่อมต่อ server ไม่ได้ (server อาจกำลัง sleep) ลองใหม่อีกครั้ง";
+    } catch (_) {
+      errorMessage = "เชื่อมต่ออุปกรณ์ไม่สำเร็จ ลองใหม่อีกครั้ง";
     }
-    await batch.commit();
 
-    print("STEP 4: ผูกอุปกรณ์สำเร็จ (atomic)");
+    if (!mounted) return;
+
+    if (errorMessage != null) {
+      await showPopup(errorMessage, isError: true);
+      if (!mounted) return;
+      setState(() {
+        isLoading = false;
+      });
+      return;
+    }
+
     // 🔥 แก้สำคัญ: ให้ user กดก่อน
-
     await showPopup("เชื่อมต่อสำเร็จ");
 
     if (!mounted) return;
@@ -187,8 +150,6 @@ class _AddDevicePageState extends State<AddDevicePage>
     setState(() {
       isLoading = false;
     });
-
-    print("STEP 6: ไปหน้า Home");
 
     Navigator.pushAndRemoveUntil(
       context,
