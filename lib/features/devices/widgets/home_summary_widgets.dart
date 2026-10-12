@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shimmer/shimmer.dart';
 import '../pages/weather_page.dart';
 
@@ -129,13 +130,18 @@ class WeatherForecastCard extends StatelessWidget {
       );
     }
 
+    // ค้นด้วย ownerUid — กฎ Firestore ใหม่ให้เจ้าของอ่านเฉพาะฟาร์มของตัวเอง ถ้าค้น
+    // ด้วยรายชื่อ id แล้วมีฟาร์มของคนอื่นปน ทั้งคำค้นจะถูกปฏิเสธ จึงดึงฟาร์มที่
+    // ตัวเองเป็นเจ้าของแล้วกรองเฉพาะฟาร์มของอุปกรณ์ที่แสดงอยู่ฝั่งแอปแทน
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('device_registry')
-          .where(FieldPath.documentId, whereIn: groupIds)
+          .where('ownerUid', isEqualTo: FirebaseAuth.instance.currentUser?.uid)
           .snapshots(),
       builder: (context, snapshot) {
-        final regs = snapshot.data?.docs ?? [];
+        final regs = (snapshot.data?.docs ?? [])
+            .where((d) => groupIds.contains(d.id))
+            .toList();
         final enabled = regs
             .where(
               (d) =>
