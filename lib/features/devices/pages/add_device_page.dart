@@ -126,7 +126,8 @@ class _AddDevicePageState extends State<AddDevicePage>
         };
       }
     } on TimeoutException {
-      errorMessage = "เชื่อมต่อ server ไม่ได้ (server อาจกำลัง sleep) ลองใหม่อีกครั้ง";
+      errorMessage =
+          "เชื่อมต่อ server ไม่ได้ (server อาจกำลัง sleep) ลองใหม่อีกครั้ง";
     } catch (_) {
       errorMessage = "เชื่อมต่ออุปกรณ์ไม่สำเร็จ ลองใหม่อีกครั้ง";
     }
