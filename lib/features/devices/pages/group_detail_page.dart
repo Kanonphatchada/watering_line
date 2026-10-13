@@ -27,7 +27,7 @@ class GroupDetailPage extends StatelessWidget {
       stream: watchMyDevices(uid),
       builder: (context, deviceSnap) {
         return StreamBuilder<List<DeviceGroup>>(
-          stream: watchDeviceGroups(uid),
+          stream: watchMyGroups(uid),
           builder: (context, groupSnap) {
             if (deviceSnap.hasError || groupSnap.hasError) {
               return Scaffold(
@@ -98,7 +98,9 @@ class GroupDetailPage extends StatelessWidget {
                   ],
                 ),
                 actions: [
-                  if (!_isUngrouped) ...[
+                  if (!_isUngrouped &&
+                      editableFarmIds(allDocs, uid)
+                          .contains(group!.farmId)) ...[
                     IconButton(
                       tooltip: "แก้ไขกลุ่ม",
                       icon: const Icon(Icons.edit_outlined),
@@ -144,7 +146,9 @@ class GroupDetailPage extends StatelessWidget {
                               ),
                               const SizedBox(height: 8),
                               const Text("ยังไม่มีอุปกรณ์ในกลุ่มนี้"),
-                              if (!_isUngrouped)
+                              if (!_isUngrouped &&
+                                  editableFarmIds(allDocs, uid)
+                                      .contains(group!.farmId))
                                 TextButton(
                                   onPressed: () => openGroupEditor(
                                     context,

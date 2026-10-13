@@ -43,7 +43,10 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'scheduleEnabled', 'scheduleMode', 'scheduleStart', 'scheduleEnd',
           'scheduleExceptEnabled', 'scheduleExceptStart', 'scheduleExceptEnd',
-          'rainSkipEnabled', 'farmLat', 'farmLon'
+          'rainSkipEnabled', 'farmLat', 'farmLon',
+          // กลุ่มอุปกรณ์ที่ตั้งชื่อเอง (ของทั้งฟาร์ม ทุกคนในฟาร์มเห็นเหมือนกัน) —
+          // แก้ได้เฉพาะเจ้าของ/ระดับจัดการได้ เหมือนการตั้งค่าฟาร์มอื่น
+          'deviceGroups'
         ]);
 
       // ❌ ห้าม client สร้าง/ลบเอง

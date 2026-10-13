@@ -134,4 +134,203 @@ void main() {
     expect(r.first.deviceIds, ['n1']);
     expect(r.last.deviceIds, ['n3']);
   });
+
+  group("กลุ่มของฟาร์ม", () {
+    test(
+        "parseDeviceGroups ใส่ farmId จากเอกสารที่อ่าน ไม่ได้เก็บซ้ำในตัวกลุ่ม",
+        () {
+      final parsed = parseDeviceGroups({
+        "deviceGroups": [a.toMap()],
+      }, farmId: "FarmA");
+      expect(parsed.single.farmId, "FarmA");
+      expect(a.toMap().containsKey("farmId"), isFalse);
+      expect(
+          parseDeviceGroups({
+            "deviceGroups": [a.toMap()]
+          }).single.farmId,
+          isNull);
+    });
+
+    test(
+        "copyWith/setGroupMembers ไม่ทำ farmId หาย และ groupsOfFarm กรองตามฟาร์ม",
+        () {
+      final g1 = DeviceGroup(
+          id: "1", name: "x", deviceIds: const ["n1"], farmId: "FarmA");
+      final g2 = DeviceGroup(
+          id: "2", name: "y", deviceIds: const ["n9"], farmId: "FarmB");
+      final r = setGroupMembers([g1, g2], "1", ["n1", "n2"]);
+      expect(r.map((g) => g.farmId), ["FarmA", "FarmB"]);
+      expect(groupsOfFarm(r, "FarmB").map((g) => g.id), ["2"]);
+      expect(groupsOfFarm(r, "none"), isEmpty);
+    });
+
+    test("ชื่อกลุ่มซ้ำได้ข้ามฟาร์ม ซ้ำในฟาร์มเดียวกันไม่ได้", () {
+      final inA = [DeviceGroup(id: "1", name: "ผัก", farmId: "FarmA")];
+      expect(validateGroupName("ผัก", inA), isNotNull);
+      expect(validateGroupName("ผัก", groupsOfFarm(inA, "FarmB")), isNull);
+    });
+
+    test("สิทธิ์แก้กลุ่ม: เจ้าของและระดับจัดการได้ของฟาร์มนั้นเท่านั้น", () {
+      final devices = [
+        {
+          "uid": "alice",
+          "groupId": "FarmA",
+          "settingsUids": ["alice", "mgr"],
+          "controlUids": ["alice", "mgr", "drv"],
+          "memberUids": ["alice", "mgr", "drv", "view"]
+        },
+        {
+          "uid": "zed",
+          "groupId": "FarmB",
+          "settingsUids": ["zed"],
+          "memberUids": ["zed", "mgr"]
+        },
+      ];
+      expect(editableFarmsFrom(devices, "alice"), {"FarmA"});
+      expect(editableFarmsFrom(devices, "mgr"),
+          {"FarmA"}); // FarmB: mgr เป็นแค่สมาชิก
+      expect(editableFarmsFrom(devices, "drv"), isEmpty);
+      expect(editableFarmsFrom(devices, "view"), isEmpty);
+      expect(editableFarmsFrom(devices, null), isEmpty);
+      expect(
+          editableFarmsFrom([
+            {"uid": "alice"}
+          ], "alice"),
+          isEmpty); // ไม่มี groupId
+    });
+
+    test("farmOfDevicesFrom ข้ามอุปกรณ์ที่ไม่มี groupId", () {
+      expect(
+        farmOfDevicesFrom([
+          ("n1", {"groupId": "FarmA"}),
+          ("n2", {}),
+          ("n3", {"groupId": 5})
+        ]),
+        {"n1": "FarmA"},
+      );
+    });
+  });
+
+  group("ย้ายกลุ่มเก่าของแต่ละคนขึ้นฟาร์ม", () {
+    final farmOf = {"n1": "FarmA", "n2": "FarmA", "n3": "FarmB"};
+
+    LegacyMigrationPlan plan(List<DeviceGroup> legacy,
+            {Set<String> editable = const {"FarmA", "FarmB"},
+            Map<String, List<DeviceGroup>> existing = const {}}) =>
+        planLegacyMigration(
+          legacy: legacy,
+          farmOfDevice: farmOf,
+          existingByFarm: existing,
+          editableFarms: editable,
+        );
+
+    test("กลุ่มในฟาร์มเดียว → ไปอยู่ฟาร์มนั้น คงชื่อ/ไอคอน/สี และ id คงที่",
+        () {
+      final r = plan([
+        DeviceGroup(
+            id: "g1",
+            name: "ผักกาด",
+            deviceIds: ["n1", "n2"],
+            iconKey: "herb",
+            colorIndex: 3),
+      ]);
+      final moved = r.additions["FarmA"]!.single;
+      expect(moved.id, migratedGroupId("g1", "FarmA"));
+      expect(moved.name, "ผักกาด");
+      expect(moved.deviceIds, ["n1", "n2"]);
+      expect(moved.iconKey, "herb");
+      expect(moved.colorIndex, 3);
+      expect(moved.farmId, "FarmA");
+      expect(r.migratedLegacyIds, {"g1"});
+    });
+
+    test("กลุ่มที่มีอุปกรณ์ต่างฟาร์ม → แตกเป็นกลุ่มชื่อเดียวกันฟาร์มละกลุ่ม",
+        () {
+      final r = plan([
+        DeviceGroup(id: "g1", name: "ผัก", deviceIds: ["n1", "n3"])
+      ]);
+      expect(r.additions["FarmA"]!.single.deviceIds, ["n1"]);
+      expect(r.additions["FarmB"]!.single.deviceIds, ["n3"]);
+      expect(r.migratedLegacyIds, {"g1"});
+    });
+
+    test("ฟาร์มใดฟาร์มหนึ่งแก้ไม่ได้ → รอไว้ทั้งกลุ่ม ไม่ย้ายครึ่งๆ กลางๆ", () {
+      final r = plan([
+        DeviceGroup(id: "g1", name: "ผัก", deviceIds: ["n1", "n3"])
+      ], editable: {
+        "FarmA"
+      });
+      expect(r.additions, isEmpty);
+      expect(r.migratedLegacyIds, isEmpty);
+    });
+
+    test(
+        "ชื่อซ้ำกับกลุ่มในฟาร์ม → ต่อท้ายเลข อุปกรณ์ที่อยู่กลุ่มอื่นแล้วไม่ถูกดึงซ้ำ",
+        () {
+      final existing = {
+        "FarmA": [
+          DeviceGroup(
+              id: "x", name: "ผักกาด", deviceIds: ["n2"], farmId: "FarmA")
+        ],
+      };
+      final r = plan([
+        DeviceGroup(id: "g1", name: "ผักกาด", deviceIds: ["n1", "n2"])
+      ], existing: existing);
+      final moved = r.additions["FarmA"]!.single;
+      expect(moved.name, "ผักกาด 2");
+      expect(moved.deviceIds, ["n1"]); // n2 อยู่กลุ่มเดิมของฟาร์มแล้ว
+    });
+
+    test("ย้ายซ้ำไม่ได้กลุ่มซ้ำ (id คงที่) แต่ยังนับว่าจัดการแล้ว", () {
+      final already = {
+        "FarmA": [
+          DeviceGroup(
+              id: migratedGroupId("g1", "FarmA"), name: "ผัก", farmId: "FarmA")
+        ],
+      };
+      final r = plan([
+        DeviceGroup(id: "g1", name: "ผัก", deviceIds: ["n1"])
+      ], existing: already);
+      expect(r.additions, isEmpty);
+      expect(r.migratedLegacyIds, {"g1"});
+    });
+
+    test(
+        "กลุ่มว่าง: มีฟาร์มเดียวที่แก้ได้ → ย้ายเข้าฟาร์มนั้น; หลายฟาร์ม → ทิ้ง; ไม่มีสิทธิ์ → รอ",
+        () {
+      final empty = [DeviceGroup(id: "g1", name: "ว่าง")];
+      expect(
+          plan(empty, editable: {"FarmA"}).additions["FarmA"]!.single.deviceIds,
+          isEmpty);
+      final multi = plan(empty);
+      expect(multi.additions, isEmpty);
+      expect(multi.migratedLegacyIds, {"g1"});
+      final none = plan(empty, editable: {});
+      expect(none.migratedLegacyIds, isEmpty);
+    });
+
+    test(
+        "อุปกรณ์ที่ถูกลบไปแล้วไม่ถูกย้าย; กลุ่มที่เหลือแต่อุปกรณ์ที่หายไปไม่ทำให้พัง",
+        () {
+      final r = plan([
+        DeviceGroup(id: "g1", name: "ผัก", deviceIds: ["gone", "n1"])
+      ]);
+      expect(r.additions["FarmA"]!.single.deviceIds, ["n1"]);
+    });
+
+    test(
+        "uniqueGroupName ไม่ยาวเกิน ${maxGroupNameLength} และข้ามเลขที่ใช้แล้ว",
+        () {
+      final long = "ก" * maxGroupNameLength;
+      final existing = [
+        DeviceGroup(id: "1", name: long),
+        DeviceGroup(id: "2", name: "${"ก" * (maxGroupNameLength - 2)} 2")
+      ];
+      final u = uniqueGroupName(long, existing);
+      expect(u.length, lessThanOrEqualTo(maxGroupNameLength));
+      expect(existing.any((g) => g.name.toLowerCase() == u.toLowerCase()),
+          isFalse);
+      expect(uniqueGroupName("ใหม่", existing), "ใหม่");
+    });
+  });
 }

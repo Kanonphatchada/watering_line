@@ -36,6 +36,10 @@ class _HomePageState extends State<HomePage> {
   // ค่าใหม่มา — โชว์แค่ครั้งเดียวต่อการเปิดหน้านี้หนึ่งรอบ
   bool _alertShown = false;
 
+  // ย้ายกลุ่มรุ่นเก่า (users/{uid}.deviceGroups) ขึ้นไปไว้ที่ฟาร์มแค่ครั้งเดียวต่อ
+  // การเปิดหน้านี้ ถ้าไม่สำเร็จ (เช่นกฎยังไม่อนุญาต) เงียบไว้ ครั้งหน้าลองใหม่
+  bool _migrationStarted = false;
+
   // ค้นหาอุปกรณ์ด้วยชื่อ — อยู่ในแถบด้านบนแบบถาวรแล้ว (ไม่ต้องกดเปิด/ปิดอีก
   // ต่อไปเหมือนตอนใช้ AppBar/Drawer เดิม)
   final _searchController = TextEditingController();
@@ -65,6 +69,10 @@ class _HomePageState extends State<HomePage> {
         builder: (context, snapshot) {
           Widget content;
           final docs = snapshot.data ?? [];
+          if (docs.isNotEmpty && !_migrationStarted) {
+            _migrationStarted = true;
+            migrateLegacyGroups(uid, docs).catchError((_) {});
+          }
 
           if (snapshot.hasError) {
             content = Center(
@@ -217,7 +225,7 @@ class _HomePageState extends State<HomePage> {
                       padding: const EdgeInsets.fromLTRB(12, 16, 12, 0),
                     ),
                     StreamBuilder<List<DeviceGroup>>(
-                      stream: watchDeviceGroups(uid),
+                      stream: watchMyGroups(uid),
                       builder: (context, groupSnap) => _devicesSection(
                         context,
                         allDocs: docs,
@@ -379,6 +387,11 @@ class _HomePageState extends State<HomePage> {
     required List<DeviceGroup> groups,
   }) {
     final muted = Theme.of(context).textTheme.bodySmall?.color;
+    // กลุ่มเป็นของฟาร์ม — สร้าง/แก้ได้เฉพาะเจ้าของและสมาชิกระดับ "จัดการได้"
+    final canEditGroups = editableFarmIds(
+      allDocs,
+      FirebaseAuth.instance.currentUser?.uid,
+    ).isNotEmpty;
 
     Widget header(String title, {List<Widget> actions = const []}) {
       return Padding(
@@ -429,12 +442,13 @@ class _HomePageState extends State<HomePage> {
           header(
             "อุปกรณ์ทั้งหมด",
             actions: [
-              TextButton.icon(
-                onPressed: () =>
-                    openGroupEditor(context, docs: allDocs, groups: groups),
-                icon: const Icon(Icons.add_rounded, size: 18),
-                label: const Text("สร้างกลุ่ม"),
-              ),
+              if (canEditGroups)
+                TextButton.icon(
+                  onPressed: () =>
+                      openGroupEditor(context, docs: allDocs, groups: groups),
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: const Text("สร้างกลุ่ม"),
+                ),
             ],
           ),
           DeviceGrid(docs: allDocs, allDocs: allDocs),
@@ -479,13 +493,15 @@ class _HomePageState extends State<HomePage> {
         header(
           "กลุ่มของฉัน (${groups.length})",
           actions: [
-            FilledButton.tonalIcon(
-              onPressed: () =>
-                  openGroupEditor(context, docs: allDocs, groups: groups),
-              icon: const Icon(Icons.add_rounded, size: 18),
-              label: const Text("เพิ่มกลุ่ม"),
-            ),
-            const SizedBox(width: 4),
+            if (canEditGroups) ...[
+              FilledButton.tonalIcon(
+                onPressed: () =>
+                    openGroupEditor(context, docs: allDocs, groups: groups),
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const Text("เพิ่มกลุ่ม"),
+              ),
+              const SizedBox(width: 4),
+            ],
             IconButton(
               tooltip: "จัดการกลุ่ม",
               icon: const Icon(Icons.tune_rounded),

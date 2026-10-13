@@ -242,3 +242,32 @@ test("บอร์ด: ยังอ่าน/เขียนอุปกรณ�
   await assertSucceeds(setDoc(doc(c.esp(), "ESP32/Nano1/Logs/l9"), { moisture: 1 }));
   await assertFails(updateDoc(doc(c.esp(), "ESP32/Nano1"), { Valve: true }));
 });
+
+// ───────────── กลุ่มอุปกรณ์ของฟาร์ม (device_registry.deviceGroups) ─────────────
+
+test("กลุ่มอุปกรณ์ของฟาร์ม: ทุกคนในฟาร์มอ่านได้ แต่แก้ได้เฉพาะเจ้าของและระดับจัดการได้", async () => {
+  const groups = [{ id: "g1", name: "ผักกาด", iconKey: "leaf", colorIndex: 0, deviceIds: ["Nano1"] }];
+  await assertSucceeds(updateDoc(doc(c.alice(), "device_registry/FarmA"), { deviceGroups: groups }));
+  await assertSucceeds(updateDoc(doc(manager(), "device_registry/FarmA"), { deviceGroups: groups }));
+  await assertFails(updateDoc(doc(driver(), "device_registry/FarmA"), { deviceGroups: groups }));
+  await assertFails(updateDoc(doc(viewer(), "device_registry/FarmA"), { deviceGroups: groups }));
+  await assertFails(updateDoc(doc(outsider(), "device_registry/FarmA"), { deviceGroups: groups }));
+
+  // สมาชิกทุกระดับเห็นกลุ่มที่เจ้าของตั้งไว้
+  for (const db of [viewer(), driver(), manager()]) {
+    const snap = await assertSucceeds(getDoc(doc(db, "device_registry/FarmA")));
+    if (snap.data().deviceGroups?.[0]?.name !== "ผักกาด") throw new Error("สมาชิกต้องเห็นกลุ่มของฟาร์ม");
+  }
+});
+
+test("เขียนกลุ่มพร้อมฟิลด์ที่ไม่อนุญาต (เช่น members) ในคำสั่งเดียวไม่ได้", async () => {
+  await assertFails(
+    updateDoc(doc(manager(), "device_registry/FarmA"), {
+      deviceGroups: [],
+      members: { evil: { control: true, settings: true } },
+    })
+  );
+  await assertFails(
+    updateDoc(doc(manager(), "device_registry/FarmA"), { deviceGroups: [], memberUids: ["evil"] })
+  );
+});
