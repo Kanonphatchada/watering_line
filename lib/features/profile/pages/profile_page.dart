@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../shared/widgets/app_popup.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../devices/services/my_devices.dart';
 import '../../auth/pages/login_page.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../main.dart';
@@ -327,13 +328,10 @@ class _ProfilePageState extends State<ProfilePage> {
                                 trailing: Text("LINE"),
                               ),
                               const Divider(height: 1),
-                              StreamBuilder<QuerySnapshot>(
-                                stream: FirebaseFirestore.instance
-                                    .collection('ESP32')
-                                    .where('uid', isEqualTo: user.uid)
-                                    .snapshots(),
+                              StreamBuilder<List<QueryDocumentSnapshot>>(
+                                stream: watchMyDevices(user.uid),
                                 builder: (context, snapshot) {
-                                  final count = snapshot.data?.docs.length ?? 0;
+                                  final count = snapshot.data?.length ?? 0;
                                   return ListTile(
                                     leading: const Icon(Icons.sensors),
                                     title: const Text("อุปกรณ์ที่เชื่อมต่อ"),

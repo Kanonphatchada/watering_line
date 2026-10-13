@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import '../../../shared/widgets/app_popup.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../services/my_devices.dart';
 import '../services/device_schedule.dart';
+import '../services/farm_members.dart';
 import '../services/farm_schedule.dart';
 import '../utils/schedule_utils.dart';
 import '../widgets/farm_selector.dart';
@@ -29,13 +31,10 @@ class _SchedulePageState extends State<SchedulePage> {
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser?.uid;
 
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('ESP32')
-          .where('uid', isEqualTo: uid)
-          .snapshots(),
+    return StreamBuilder<List<QueryDocumentSnapshot>>(
+      stream: watchMyDevices(uid ?? ''),
       builder: (context, snapshot) {
-        final allDocs = snapshot.data?.docs ?? [];
+        final allDocs = snapshot.data ?? [];
         final groupIds = farmGroupIds(allDocs);
         final groupId =
             groupIds.contains(_groupId) ? _groupId : groupIds.firstOrNull;
@@ -159,6 +158,15 @@ class _FarmScheduleEditorState extends State<_FarmScheduleEditor> {
   FarmSchedule? _saved;
   FarmSchedule? _draft;
   bool _saving = false;
+
+  // บันทึกตารางเวลาทั้งฟาร์มได้เฉพาะเจ้าของ/สมาชิกระดับ "จัดการได้" (ตรงกับ
+  // Firestore rules) — คนอื่นดูได้แต่กดบันทึกไม่ได้
+  bool get _canEdit {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    return widget.docs.any(
+      (d) => canSettingsDevice(d.data() as Map<String, dynamic>, uid),
+    );
+  }
 
   @override
   void initState() {
@@ -365,7 +373,11 @@ class _FarmScheduleEditorState extends State<_FarmScheduleEditor> {
               children: [
                 Expanded(
                   child: Text(
-                    changed ? "มีการแก้ไขที่ยังไม่บันทึก" : "บันทึกแล้ว",
+                    !_canEdit
+                        ? "ดูอย่างเดียว — คุณไม่มีสิทธิ์แก้ไขตารางเวลา"
+                        : changed
+                            ? "มีการแก้ไขที่ยังไม่บันทึก"
+                            : "บันทึกแล้ว",
                     style: TextStyle(fontSize: 12, color: muted),
                   ),
                 ),
@@ -376,7 +388,7 @@ class _FarmScheduleEditorState extends State<_FarmScheduleEditor> {
                   ),
                 const SizedBox(width: 4),
                 FilledButton(
-                  onPressed: changed && !_saving ? _save : null,
+                  onPressed: _canEdit && changed && !_saving ? _save : null,
                   child: _saving
                       ? const SizedBox(
                           width: 18,
@@ -739,8 +751,13 @@ class _ScheduleOverviewState extends State<_ScheduleOverview> {
                             style: TextStyle(fontSize: 12, color: muted),
                           ),
                           trailing: const Icon(Icons.chevron_right),
-                          onTap: () =>
-                              openDeviceScheduleDialog(context, d.id, data),
+                          onTap: canSettingsDevice(
+                            data,
+                            FirebaseAuth.instance.currentUser?.uid,
+                          )
+                              ? () =>
+                                  openDeviceScheduleDialog(context, d.id, data)
+                              : null,
                         );
                       },
                     ),

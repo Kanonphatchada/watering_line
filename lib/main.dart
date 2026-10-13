@@ -9,6 +9,7 @@ import 'features/auth/pages/login_page.dart';
 import 'features/devices/pages/home_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'features/devices/pages/add_device_page.dart';
+import 'features/devices/services/my_devices.dart';
 
 const _brandGreen = Color(0xFF1B5E20);
 
@@ -203,12 +204,8 @@ class CheckDevicePage extends StatelessWidget {
   Future<bool> hasDevice() async {
     final uid = FirebaseAuth.instance.currentUser!.uid;
 
-    final query = await FirebaseFirestore.instance
-        .collection('device_registry')
-        .where('ownerUid', isEqualTo: uid)
-        .get();
-
-    return query.docs.isNotEmpty;
+    // เจ้าของฟาร์ม หรือสมาชิกที่ถูกเชิญเข้าฟาร์มของคนอื่น ก็ถือว่ามีอุปกรณ์
+    return (await getMyFarms(uid)).isNotEmpty;
   }
 
   @override

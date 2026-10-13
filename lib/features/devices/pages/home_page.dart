@@ -3,14 +3,18 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'add_device_page.dart';
 import 'device_groups_page.dart';
+import 'farm_members_page.dart';
 import 'group_detail_page.dart';
 import 'plant_profile_page.dart';
 import 'schedule_page.dart';
 import 'weather_page.dart';
 import '../../profile/pages/profile_page.dart';
+import '../../../shared/widgets/app_popup.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../services/device_groups.dart';
+import '../services/my_devices.dart';
 import '../services/remove_device.dart';
+import '../widgets/farm_selector.dart' show farmGroupIds;
 import '../widgets/device_grid.dart';
 import '../widgets/group_card.dart';
 import '../widgets/home_summary_widgets.dart';
@@ -56,14 +60,11 @@ class _HomePageState extends State<HomePage> {
     final uid = user!.uid;
 
     return Scaffold(
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('ESP32')
-            .where('uid', isEqualTo: uid)
-            .snapshots(),
+      body: StreamBuilder<List<QueryDocumentSnapshot>>(
+        stream: watchMyDevices(uid),
         builder: (context, snapshot) {
           Widget content;
-          final docs = snapshot.data?.docs ?? [];
+          final docs = snapshot.data ?? [];
 
           if (snapshot.hasError) {
             content = Center(
@@ -291,6 +292,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
                 onGroups: () => _openGroups(docs),
+                onMembers: () => _openMembers(docs),
                 onRemoveDevice: () => openRemoveDevicePicker(context, docs),
                 onProfile: () => Navigator.push(
                   context,
@@ -328,6 +330,38 @@ class _HomePageState extends State<HomePage> {
         context,
         MaterialPageRoute(builder: (_) => DeviceGroupsPage(docs: docs)),
       );
+
+  // หน้าสมาชิกเป็นของ "ฟาร์ม" — มีฟาร์มเดียวเปิดเลย หลายฟาร์มให้เลือกก่อน
+  Future<void> _openMembers(List<QueryDocumentSnapshot> docs) async {
+    final farms = farmGroupIds(docs);
+    if (farms.isEmpty) {
+      showAppPopup(context, "ยังไม่มีฟาร์ม", kind: PopupKind.info);
+      return;
+    }
+    var farmId = farms.first;
+    if (farms.length > 1) {
+      final picked = await showDialog<String>(
+        context: context,
+        builder: (context) => SimpleDialog(
+          title: const Text("เลือกฟาร์ม"),
+          children: [
+            for (final f in farms)
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(context, f),
+                child: Text(f),
+              ),
+          ],
+        ),
+      );
+      if (picked == null || !mounted) return;
+      farmId = picked;
+    }
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => FarmMembersPage(farmId: farmId)),
+    );
+  }
 
   void _openGroupDetail(String groupId) => Navigator.push(
         context,
@@ -621,15 +655,12 @@ class _AlertBell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      icon: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('ESP32')
-            .where('uid', isEqualTo: uid)
-            .snapshots(),
+      icon: StreamBuilder<List<QueryDocumentSnapshot>>(
+        stream: watchMyDevices(uid),
         builder: (context, snapshot) {
           int count = 0;
           if (snapshot.hasData) {
-            for (var doc in snapshot.data!.docs) {
+            for (var doc in snapshot.data!) {
               final data = doc.data() as Map<String, dynamic>;
               double moisture = (data['Moisture'] ?? 0).toDouble();
               double automois = (data['Automois'] ?? 20).toDouble();
@@ -677,15 +708,12 @@ class _AlertBell extends StatelessWidget {
         },
       ),
       onPressed: () async {
-        final snapshot = await FirebaseFirestore.instance
-            .collection('ESP32')
-            .where('uid', isEqualTo: uid)
-            .get();
+        final myDocs = await getMyDevices(uid);
 
         List<Widget> alerts = [];
 
-        for (var doc in snapshot.docs) {
-          final data = doc.data();
+        for (var doc in myDocs) {
+          final data = doc.data() as Map<String, dynamic>;
           double moisture = (data['Moisture'] ?? 0).toDouble();
           double automois = (data['Automois'] ?? 20).toDouble();
 

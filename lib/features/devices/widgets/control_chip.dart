@@ -4,7 +4,8 @@ class ControlChip extends StatelessWidget {
   final String label;
   final IconData icon;
   final bool value;
-  final ValueChanged<bool> onChanged;
+  // null = ผู้ใช้ไม่มีสิทธิ์ควบคุม สวิตช์จะกดไม่ได้ (เทาลง)
+  final ValueChanged<bool>? onChanged;
 
   const ControlChip({
     super.key,

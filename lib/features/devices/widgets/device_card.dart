@@ -6,6 +6,7 @@ import '../pages/notification_history_page.dart';
 import '../utils/schedule_utils.dart';
 import '../services/device_schedule.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../services/farm_members.dart';
 import '../services/fruit_profiles.dart';
 import '../services/plant_profile.dart';
 import '../utils/moisture_utils.dart';
@@ -90,6 +91,12 @@ class DeviceCardState extends State<DeviceCard>
     final faultType = data['faultType'] as String?;
     final hasValveFault = !isOffline && faultType != null;
 
+    // สิทธิ์ของผู้ใช้บนอุปกรณ์นี้ (เจ้าของได้ทุกอย่าง สมาชิกตามที่เจ้าของตั้ง) —
+    // ปิดปุ่มที่ไม่มีสิทธิ์ไว้ตั้งแต่ต้น แทนที่จะปล่อยให้กดแล้วโดนกฎปฏิเสธเงียบๆ
+    final myUid = FirebaseAuth.instance.currentUser?.uid;
+    final canControl = canControlDevice(data, myUid);
+    final canSettings = canSettingsDevice(data, myUid);
+
     final card = Card(
       child: Padding(
         padding: const EdgeInsets.all(18),
@@ -141,10 +148,39 @@ class DeviceCardState extends State<DeviceCard>
                       ),
                       if (data['groupId'] != null)
                         Text(
-                          "กลุ่ม: ${data['groupId']}",
+                          "ฟาร์ม: ${data['groupId']}",
                           style: TextStyle(
                             fontSize: 12,
                             color: Theme.of(context).textTheme.bodySmall?.color,
+                          ),
+                        ),
+                      if (!canControl)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.visibility_outlined,
+                                size: 13,
+                                color: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.color,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                "ดูอย่างเดียว",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.color,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       const SizedBox(height: 2),
@@ -214,49 +250,55 @@ class DeviceCardState extends State<DeviceCard>
                     value: (data['scheduleEnabled'] == true)
                         ? (data['desiredAuto'] ?? data['Auto'] ?? false)
                         : (data['Auto'] ?? false),
-                    onChanged: (val) async {
-                      final scheduleEnabled = data['scheduleEnabled'] == true;
+                    onChanged: !canControl
+                        ? null
+                        : (val) async {
+                            final scheduleEnabled =
+                                data['scheduleEnabled'] == true;
 
-                      if (!scheduleEnabled) {
-                        // ของเดิม ไม่เปลี่ยนพฤติกรรมเลยถ้าไม่ได้เปิดใช้
-                        // ตารางเวลา
-                        await FirebaseFirestore.instance
-                            .collection('ESP32')
-                            .doc(nanoId)
-                            .update({
-                          'Auto': val,
-                          if (val == true) 'Valve': false,
-                        });
-                        return;
-                      }
+                            if (!scheduleEnabled) {
+                              // ของเดิม ไม่เปลี่ยนพฤติกรรมเลยถ้าไม่ได้เปิดใช้
+                              // ตารางเวลา
+                              await FirebaseFirestore.instance
+                                  .collection('ESP32')
+                                  .doc(nanoId)
+                                  .update({
+                                'Auto': val,
+                                if (val == true) 'Valve': false,
+                              });
+                              return;
+                            }
 
-                      final scheduleStart = data['scheduleStart'] as String?;
-                      final scheduleEnd = data['scheduleEnd'] as String?;
-                      bool allowedNow = true;
-                      if (scheduleStart != null && scheduleEnd != null) {
-                        allowedNow = resolveScheduleAllowed(
-                          mode: data['scheduleMode'] == 'block'
-                              ? 'block'
-                              : 'allow',
-                          startHHmm: scheduleStart,
-                          endHHmm: scheduleEnd,
-                          exceptEnabled: data['scheduleExceptEnabled'] == true,
-                          exceptStartHHmm:
-                              data['scheduleExceptStart'] as String?,
-                          exceptEndHHmm: data['scheduleExceptEnd'] as String?,
-                        );
-                      }
-                      final effective = val && allowedNow;
+                            final scheduleStart =
+                                data['scheduleStart'] as String?;
+                            final scheduleEnd = data['scheduleEnd'] as String?;
+                            bool allowedNow = true;
+                            if (scheduleStart != null && scheduleEnd != null) {
+                              allowedNow = resolveScheduleAllowed(
+                                mode: data['scheduleMode'] == 'block'
+                                    ? 'block'
+                                    : 'allow',
+                                startHHmm: scheduleStart,
+                                endHHmm: scheduleEnd,
+                                exceptEnabled:
+                                    data['scheduleExceptEnabled'] == true,
+                                exceptStartHHmm:
+                                    data['scheduleExceptStart'] as String?,
+                                exceptEndHHmm:
+                                    data['scheduleExceptEnd'] as String?,
+                              );
+                            }
+                            final effective = val && allowedNow;
 
-                      await FirebaseFirestore.instance
-                          .collection('ESP32')
-                          .doc(nanoId)
-                          .update({
-                        'desiredAuto': val,
-                        'Auto': effective,
-                        if (effective) 'Valve': false,
-                      });
-                    },
+                            await FirebaseFirestore.instance
+                                .collection('ESP32')
+                                .doc(nanoId)
+                                .update({
+                              'desiredAuto': val,
+                              'Auto': effective,
+                              if (effective) 'Valve': false,
+                            });
+                          },
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -265,24 +307,26 @@ class DeviceCardState extends State<DeviceCard>
                     label: "Valve",
                     icon: Icons.water,
                     value: data['Valve'] ?? false,
-                    onChanged: (val) async {
-                      await FirebaseFirestore.instance
-                          .collection('ESP32')
-                          .doc(nanoId)
-                          .update({
-                        'Valve': val,
-                        // เปิด Valve มือ = ปิด Auto กันชนกัน แต่ปิด Valve ไม่ควร
-                        // ไปเปิด Auto กลับให้เอง เพราะผู้ใช้อาจตั้งใจแค่จะหยุด
-                        // รดน้ำ ไม่ได้ต้องการให้ระบบตัดสินใจเปิดวาล์วเองอีก
-                        //
-                        // ต้องเคลียร์ desiredAuto ไปด้วย ไม่งั้นถ้าเปิดใช้
-                        // ตารางเวลาไว้ checkDevices.js รอบถัดไปจะเห็นว่า
-                        // desiredAuto ยังเป็น true แล้วเปิด Auto กลับมาเอง
-                        // ทับการเปิดวาล์วมือที่เพิ่งสั่งไป
-                        if (val == true) 'Auto': false,
-                        if (val == true) 'desiredAuto': false,
-                      });
-                    },
+                    onChanged: !canControl
+                        ? null
+                        : (val) async {
+                            await FirebaseFirestore.instance
+                                .collection('ESP32')
+                                .doc(nanoId)
+                                .update({
+                              'Valve': val,
+                              // เปิด Valve มือ = ปิด Auto กันชนกัน แต่ปิด Valve ไม่ควร
+                              // ไปเปิด Auto กลับให้เอง เพราะผู้ใช้อาจตั้งใจแค่จะหยุด
+                              // รดน้ำ ไม่ได้ต้องการให้ระบบตัดสินใจเปิดวาล์วเองอีก
+                              //
+                              // ต้องเคลียร์ desiredAuto ไปด้วย ไม่งั้นถ้าเปิดใช้
+                              // ตารางเวลาไว้ checkDevices.js รอบถัดไปจะเห็นว่า
+                              // desiredAuto ยังเป็น true แล้วเปิด Auto กลับมาเอง
+                              // ทับการเปิดวาล์วมือที่เพิ่งสั่งไป
+                              if (val == true) 'Auto': false,
+                              if (val == true) 'desiredAuto': false,
+                            });
+                          },
                   ),
                 ),
               ],
@@ -301,7 +345,7 @@ class DeviceCardState extends State<DeviceCard>
             _PlantProfileLabel(
               nanoId: nanoId,
               data: data,
-              onTap: widget.onPlantTap,
+              onTap: canControl ? widget.onPlantTap : null,
             ),
             const SizedBox(height: 14),
             const Divider(height: 1),
@@ -359,7 +403,11 @@ class DeviceCardState extends State<DeviceCard>
                 // เป็นการตั้งค่าเฉพาะอุปกรณ์นี้ — ต่างจาก "ลบอุปกรณ์" ที่ย้าย
                 // ไปรวมอยู่ในเมนูรวมของหน้าหลักแทนแล้ว)
                 Expanded(
-                  child: _ScheduleActionButton(nanoId: nanoId, data: data),
+                  child: _ScheduleActionButton(
+                    nanoId: nanoId,
+                    data: data,
+                    enabled: canSettings,
+                  ),
                 ),
               ],
             ),
@@ -499,8 +547,13 @@ class _ScheduleStatusLabel extends StatelessWidget {
 class _ScheduleActionButton extends StatelessWidget {
   final String nanoId;
   final Map<String, dynamic> data;
+  final bool enabled;
 
-  const _ScheduleActionButton({required this.nanoId, required this.data});
+  const _ScheduleActionButton({
+    required this.nanoId,
+    required this.data,
+    required this.enabled,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -509,7 +562,9 @@ class _ScheduleActionButton extends StatelessWidget {
         icon: Icons.schedule,
         label: "ตั้งเวลา",
         showBadge: s != null,
-        onTap: () => openDeviceScheduleDialog(context, nanoId, data),
+        onTap: enabled
+            ? () => openDeviceScheduleDialog(context, nanoId, data)
+            : null,
       );
     });
   }

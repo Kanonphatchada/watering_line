@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/device_groups.dart';
+import '../services/my_devices.dart';
 import '../widgets/device_grid.dart';
 import '../widgets/group_style.dart';
 import 'device_groups_page.dart';
@@ -22,11 +23,8 @@ class GroupDetailPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser!.uid;
 
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('ESP32')
-          .where('uid', isEqualTo: uid)
-          .snapshots(),
+    return StreamBuilder<List<QueryDocumentSnapshot>>(
+      stream: watchMyDevices(uid),
       builder: (context, deviceSnap) {
         return StreamBuilder<List<DeviceGroup>>(
           stream: watchDeviceGroups(uid),
@@ -48,7 +46,7 @@ class GroupDetailPage extends StatelessWidget {
               );
             }
 
-            final allDocs = deviceSnap.data!.docs;
+            final allDocs = deviceSnap.data!;
             final groups = pruneMissingDevices(
               groupSnap.data!,
               allDocs.map((d) => d.id).toSet(),
