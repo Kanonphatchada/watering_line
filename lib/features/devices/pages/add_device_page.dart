@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import '../../../main.dart';
+import 'join_farm_dialog.dart';
 
 class AddDevicePage extends StatefulWidget {
   const AddDevicePage({super.key});
@@ -159,6 +160,20 @@ class _AddDevicePageState extends State<AddDevicePage>
     );
   }
 
+  // เข้าร่วมฟาร์มของคนอื่นด้วยรหัสเชิญ — ผ่านแล้วไปหน้าหลักเหมือนตอนผูกอุปกรณ์สำเร็จ
+  Future<void> joinWithInvite() async {
+    if (isLoading) return;
+    final farmId = await showJoinFarmDialog(context);
+    if (farmId == null || !mounted) return;
+    await showPopup("เข้าร่วมฟาร์ม \"$farmId\" สำเร็จ");
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const CheckDevicePage()),
+      (route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -279,6 +294,22 @@ class _AddDevicePageState extends State<AddDevicePage>
                               ),
                             ),
                           ),
+                        ),
+                        const SizedBox(height: 20),
+                        const Divider(),
+                        const SizedBox(height: 4),
+                        Text(
+                          "มีคนเชิญคุณเข้าฟาร์มของเขา?",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Theme.of(context).textTheme.bodySmall?.color,
+                          ),
+                        ),
+                        TextButton.icon(
+                          onPressed: isLoading ? null : joinWithInvite,
+                          icon: const Icon(Icons.group_add_outlined, size: 18),
+                          label: const Text("เข้าร่วมฟาร์มด้วยรหัสเชิญ"),
                         ),
                       ],
                     ),

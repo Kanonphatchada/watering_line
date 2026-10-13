@@ -104,10 +104,18 @@ Future<void> confirmAndRemoveDevice(BuildContext context, String nanoId) async {
 // เลือกในไดอะล็อกนี้ พอเลือกแล้วค่อยไปเข้ากล่องยืนยัน (confirmAndRemoveDevice) ต่อ
 Future<void> openRemoveDevicePicker(
   BuildContext context,
-  List<QueryDocumentSnapshot> docs,
+  List<QueryDocumentSnapshot> allDocs,
 ) async {
+  var docs = allDocs;
+  // ยกเลิกการผูกได้เฉพาะอุปกรณ์ที่ตัวเองเป็นเจ้าของ (backend ก็ตรวจ uid อยู่แล้ว)
+  // อุปกรณ์ของฟาร์มที่ถูกเชิญเป็นสมาชิกใช้ "ออกจากฟาร์ม" ในหน้าสมาชิกแทน
+  final myUid = FirebaseAuth.instance.currentUser?.uid;
+  docs = docs
+      .where((d) => (d.data() as Map<String, dynamic>)['uid'] == myUid)
+      .toList();
   if (docs.isEmpty) {
-    showAppPopup(context, "ยังไม่มีอุปกรณ์ให้ลบ", kind: PopupKind.info);
+    showAppPopup(context, "ยังไม่มีอุปกรณ์ที่คุณเป็นเจ้าของให้ลบ",
+        kind: PopupKind.info);
     return;
   }
 
