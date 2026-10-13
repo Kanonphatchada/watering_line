@@ -37,7 +37,8 @@ export {
 
 setLogLevel("error");
 
-export function useRules(rulesUrl, projectId) {
+// seedExtra(db): ข้อมูลตั้งต้นเพิ่มเติมของชุดทดสอบนั้นๆ (รันหลังข้อมูลตั้งต้นกลาง)
+export function useRules(rulesUrl, projectId, seedExtra) {
   const state = { env: null };
 
   before(async () => {
@@ -93,6 +94,7 @@ export function useRules(rulesUrl, projectId) {
         secret: "free-secret",
       });
       await setDoc(doc(db, "users/alice"), { displayName: "Alice" });
+      if (seedExtra) await seedExtra(db);
     });
   });
 

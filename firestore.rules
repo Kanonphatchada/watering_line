@@ -4,27 +4,42 @@ service cloud.firestore {
 
     // ───────────────────────────────────────────────────────────────────
     // ชุดกฎที่อุดช่องโหว่ 5 ข้อของชุดเดิม (ดู rules_test/baseline.test.js ที่เก็บ
-    // พฤติกรรมเดิมไว้เทียบ) โดย "ไม่แตะ" ข้อกำหนดของบอร์ด ESP32 เลย:
+    // พฤติกรรมเดิมไว้เทียบ) + รองรับสมาชิกของฟาร์ม โดย "ไม่แตะ" ข้อกำหนดของบอร์ด
+    // ESP32 เลย:
     //   - isESP32() และ clause ของบอร์ดใน ESP32/{nanoId} เหมือนเดิมทุกตัวอักษร
-    //   - ทุกการอ้าง resource.data.uid / ownerUid ใช้ .get('...', null) แทนการ
-    //     อ้างตรงๆ เพราะอ้างฟิลด์ที่ไม่มีอยู่แล้วกฎจะ error (ไม่ใช่ false) ซึ่งเป็น
-    //     สาเหตุที่เคยทำให้บอร์ดต่อไม่ติดตอนแก้กฎรอบก่อน
-    //   - การ "เชื่อมอุปกรณ์" (claim) ย้ายไปทำที่ backend ด้วย Admin SDK
-    //     (ตรวจรหัสลับฝั่งเซิร์ฟเวอร์) client เขียน uid/ownerUid เองไม่ได้อีก
+    //   - ทุกการอ้าง resource.data.xxx ที่อาจไม่มีฟิลด์ใช้ .get('xxx', default)
+    //     เพราะอ้างฟิลด์ที่ไม่มีอยู่แล้วกฎจะ error (ไม่ใช่ false) ซึ่งเป็นสาเหตุที่
+    //     เคยทำให้บอร์ดต่อไม่ติดตอนแก้กฎรอบก่อน
+    //   - การเชื่อมอุปกรณ์ (claim) และการเชิญ/ปรับสิทธิ์/ลบสมาชิก ทำที่ backend
+    //     ด้วย Admin SDK (ตรวจรหัสลับ/รหัสเชิญฝั่งเซิร์ฟเวอร์) client เขียนฟิลด์
+    //     uid, ownerUid, members, memberUids, controlUids, settingsUids เองไม่ได้
+    //
+    // สมาชิก: backend เก็บรายชื่อ uid ไว้บนฟาร์มและบน ESP32 ทุกตัวในฟาร์ม
+    //   memberUids   = เจ้าของ + สมาชิกทุกคน (ดูได้)
+    //   controlUids  = ที่สั่งวาล์ว/Auto/ความชื้นเป้าหมายได้
+    //   settingsUids = ที่ตั้งตารางเวลา/ข้ามฝน/ตำแหน่งฟาร์มได้ (ต้องมี control ด้วย)
+    // เจ้าของ (ฟิลด์ uid / ownerUid) ได้ทุกสิทธิ์เสมอ แม้เอกสารยังไม่มีรายชื่อ
+    // (ฟาร์มเก่าที่ backend ยังไม่ได้ซิงก์รายชื่อให้)
     // ───────────────────────────────────────────────────────────────────
 
-    // ข้อมูลฟาร์ม/กลุ่มอุปกรณ์ (มีรหัสลับ secret สำหรับเชื่อมอุปกรณ์) — อ่านได้
-    // เฉพาะเจ้าของ รหัสลับจึงไม่รั่วให้ผู้ใช้อื่นอีกต่อไป
-    // หมายเหตุ: กฎไม่ใช่ตัวกรอง — คำค้น (query) ต้องมี where ownerUid == uid ด้วย
+    // ข้อมูลฟาร์ม/กลุ่มอุปกรณ์ (มีรหัสลับ secret สำหรับเชื่อมอุปกรณ์) — เจ้าของและ
+    // สมาชิกอ่านได้ ผู้ใช้อื่นอ่านไม่ได้
+    // หมายเหตุ: กฎไม่ใช่ตัวกรอง — คำค้น (query) ต้องมี where ที่พิสูจน์ได้ว่าผู้ใช้
+    // เป็นเจ้าของ (ownerUid == uid) หรือเป็นสมาชิก (memberUids array-contains uid)
     match /device_registry/{deviceId} {
 
-      allow read: if request.auth != null
-        && resource.data.get('ownerUid', null) == request.auth.uid;
+      allow read: if request.auth != null && (
+        resource.data.get('ownerUid', null) == request.auth.uid
+        || request.auth.uid in resource.data.get('memberUids', [])
+      );
 
-      // เจ้าของตั้งค่าระดับฟาร์มได้เฉพาะฟิลด์เหล่านี้ (เหมือนชุดเดิม) —
-      // ไม่มี clause "claim" แล้ว (ownerUid เปลี่ยนได้เฉพาะผ่าน backend)
+      // เจ้าของและสมาชิกที่มีสิทธิ์ตั้งค่า (settingsUids) แก้ได้เฉพาะฟิลด์เหล่านี้
+      // ownerUid / members / รายชื่อสิทธิ์ แก้ผ่าน backend เท่านั้น
       allow update: if request.auth != null
-        && resource.data.get('ownerUid', null) == request.auth.uid
+        && (
+          resource.data.get('ownerUid', null) == request.auth.uid
+          || request.auth.uid in resource.data.get('settingsUids', [])
+        )
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'scheduleEnabled', 'scheduleMode', 'scheduleStart', 'scheduleEnd',
           'scheduleExceptEnabled', 'scheduleExceptStart', 'scheduleExceptEnd',
@@ -41,9 +56,28 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.email == "project@gg.com";
     }
 
-    function isNodeOwner(nanoId) {
-      return request.auth != null &&
-             request.auth.uid == get(/databases/$(database)/documents/ESP32/$(nanoId)).data.get('uid', null);
+    // เจ้าของ (uid ในอุปกรณ์) หรือสมาชิกของฟาร์ม ที่อ่านข้อมูลอุปกรณ์นี้ได้
+    function isNodeMember(nanoId) {
+      let node = get(/databases/$(database)/documents/ESP32/$(nanoId)).data;
+      return request.auth != null && (
+        request.auth.uid == node.get('uid', null)
+        || request.auth.uid in node.get('memberUids', [])
+      );
+    }
+
+    // สิทธิ์ของผู้ใช้ปัจจุบันบนเอกสารอุปกรณ์ที่กำลังแก้ (เจ้าของได้ทุกสิทธิ์เสมอ)
+    function canControl() {
+      return request.auth.uid == resource.data.get('uid', null)
+        || request.auth.uid in resource.data.get('controlUids', []);
+    }
+
+    function canSettings() {
+      return request.auth.uid == resource.data.get('uid', null)
+        || request.auth.uid in resource.data.get('settingsUids', []);
+    }
+
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
     }
 
     match /users/{userId} {
@@ -52,23 +86,37 @@ service cloud.firestore {
 
     match /ESP32/{nanoId} {
 
-      // เจ้าของอ่านอุปกรณ์ตัวเอง และบอร์ด (isESP32) อ่านได้ทุกตัว — เอา
-      // "|| true" เดิมออกแล้ว ผู้ใช้อื่นดูข้อมูลอุปกรณ์ของเราไม่ได้อีก
+      // เจ้าของ/สมาชิกอ่านอุปกรณ์ของฟาร์มตัวเอง และบอร์ด (isESP32) อ่านได้ทุกตัว
       allow read: if request.auth != null && (
         request.auth.uid == resource.data.get('uid', null)
+        || request.auth.uid in resource.data.get('memberUids', [])
         || isESP32()
       );
 
       allow create: if isESP32();
 
       allow update: if request.auth != null && (
-        (request.auth.uid == resource.data.get('uid', null) &&
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-           'Auto', 'Automois', 'Valve',
-           'scheduleEnabled', 'scheduleMode', 'scheduleStart', 'scheduleEnd', 'desiredAuto',
-           'scheduleOverride',
-           'scheduleExceptEnabled', 'scheduleExceptStart', 'scheduleExceptEnd'
-         ]))
+        // ควบคุม: วาล์ว / Auto / ความชื้นเป้าหมาย / ค่า Auto ที่ผู้ใช้ต้องการ
+        (changedKeys().hasOnly(['Auto', 'Automois', 'Valve', 'desiredAuto'])
+          && canControl())
+
+        // ตั้งค่าตารางเวลาระดับอุปกรณ์ (ไม่แตะฟิลด์ควบคุม)
+        || (changedKeys().hasOnly([
+              'scheduleEnabled', 'scheduleMode', 'scheduleStart', 'scheduleEnd',
+              'scheduleOverride',
+              'scheduleExceptEnabled', 'scheduleExceptStart', 'scheduleExceptEnd'
+            ])
+          && canSettings())
+
+        // บันทึกตารางเวลาในแอปเขียนฟิลด์ตารางเวลาปนกับ Auto/Valve ในคำสั่งเดียว
+        // → ต้องมีทั้งสองสิทธิ์
+        || (changedKeys().hasOnly([
+              'Auto', 'Automois', 'Valve', 'desiredAuto',
+              'scheduleEnabled', 'scheduleMode', 'scheduleStart', 'scheduleEnd',
+              'scheduleOverride',
+              'scheduleExceptEnabled', 'scheduleExceptStart', 'scheduleExceptEnd'
+            ])
+          && canControl() && canSettings())
 
         // ❌ ตัด clause "[CLAIM DEVICE] ตั้ง uid ครั้งแรกเอง" ออกแล้ว — เดิมใครก็
         // จับอุปกรณ์ที่ยังไม่มีเจ้าของเป็นของตัวเองได้โดยไม่ต้องใช้รหัสลับ
@@ -82,14 +130,14 @@ service cloud.firestore {
     }
 
     match /ESP32/{nanoId}/Logs/{logId} {
-      allow read: if request.auth != null && (isNodeOwner(nanoId) || isESP32());
+      allow read: if request.auth != null && (isNodeMember(nanoId) || isESP32());
       allow create: if isESP32();
       allow update, delete: if false;
     }
 
-    // ประวัติ incident ที่ backend เขียนผ่าน Admin SDK — client แค่เจ้าของอ่านได้
+    // ประวัติ incident ที่ backend เขียนผ่าน Admin SDK — client แค่เจ้าของ/สมาชิกอ่านได้
     match /ESP32/{nanoId}/Incidents/{incidentId} {
-      allow read: if isNodeOwner(nanoId);
+      allow read: if isNodeMember(nanoId);
       allow create, update, delete: if false;
     }
   }
