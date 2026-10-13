@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shimmer/shimmer.dart';
 import '../pages/weather_page.dart';
+import '../services/my_devices.dart';
 
 class HomeSkeleton extends StatelessWidget {
   const HomeSkeleton({super.key});
@@ -133,13 +134,10 @@ class WeatherForecastCard extends StatelessWidget {
     // ค้นด้วย ownerUid — กฎ Firestore ใหม่ให้เจ้าของอ่านเฉพาะฟาร์มของตัวเอง ถ้าค้น
     // ด้วยรายชื่อ id แล้วมีฟาร์มของคนอื่นปน ทั้งคำค้นจะถูกปฏิเสธ จึงดึงฟาร์มที่
     // ตัวเองเป็นเจ้าของแล้วกรองเฉพาะฟาร์มของอุปกรณ์ที่แสดงอยู่ฝั่งแอปแทน
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('device_registry')
-          .where('ownerUid', isEqualTo: FirebaseAuth.instance.currentUser?.uid)
-          .snapshots(),
+    return StreamBuilder<List<QueryDocumentSnapshot>>(
+      stream: watchMyFarms(FirebaseAuth.instance.currentUser?.uid ?? ''),
       builder: (context, snapshot) {
-        final regs = (snapshot.data?.docs ?? [])
+        final regs = (snapshot.data ?? [])
             .where((d) => groupIds.contains(d.id))
             .toList();
         final enabled = regs

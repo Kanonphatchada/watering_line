@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../shared/widgets/app_popup.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../services/farm_members.dart';
 import '../services/fruit_profiles.dart';
 import '../services/plant_profile.dart';
 import '../widgets/fruit_icon.dart';
@@ -602,9 +603,15 @@ class _PlantProfilePageState extends State<PlantProfilePage> {
 
   Widget _buildSaveBar() {
     final target = _newTarget;
-    final ready = target != null && _checked.isNotEmpty && !_saving;
+    // ตั้งความชื้นเป้าหมาย (Automois) ต้องมีสิทธิ์ควบคุมบนทุกอุปกรณ์ที่เลือก
+    final myUid = FirebaseAuth.instance.currentUser?.uid;
+    final allowed = _groupDocs.where((d) => _checked.contains(d.id)).every(
+        (d) => canControlDevice(d.data() as Map<String, dynamic>, myUid));
+    final ready = allowed && target != null && _checked.isNotEmpty && !_saving;
     final String hint;
-    if (_plantId == null) {
+    if (!allowed) {
+      hint = "คุณไม่มีสิทธิ์ควบคุมอุปกรณ์ที่เลือกไว้ (ดูอย่างเดียว)";
+    } else if (_plantId == null) {
       hint = "เลือกชนิดพืชก่อน";
     } else if (_plantId == 'fruit' && _fruit == null) {
       hint = "เลือกชนิดผลไม้";

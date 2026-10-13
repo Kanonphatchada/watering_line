@@ -3,6 +3,8 @@ import '../../../shared/widgets/app_popup.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../shared/web/web_utils.dart';
+import '../services/my_devices.dart';
+import '../services/farm_members.dart';
 import '../services/rain_skip.dart';
 import '../widgets/farm_selector.dart';
 
@@ -26,13 +28,10 @@ class _WeatherPageState extends State<WeatherPage> {
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser?.uid;
 
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('ESP32')
-          .where('uid', isEqualTo: uid)
-          .snapshots(),
+    return StreamBuilder<List<QueryDocumentSnapshot>>(
+      stream: watchMyDevices(uid ?? ''),
       builder: (context, snapshot) {
-        final groupIds = farmGroupIds(snapshot.data?.docs ?? []);
+        final groupIds = farmGroupIds(snapshot.data ?? []);
         final groupId =
             groupIds.contains(_groupId) ? _groupId : groupIds.firstOrNull;
 
@@ -436,6 +435,12 @@ class _SettingsCardState extends State<_SettingsCard> {
   bool _searching = false;
   bool _saving = false;
 
+  // ตั้งค่าข้ามฝน/ตำแหน่งฟาร์มได้เฉพาะเจ้าของ/สมาชิกระดับ "จัดการได้"
+  bool get _canEdit => canSettingsFarm(
+        widget.registry,
+        FirebaseAuth.instance.currentUser?.uid,
+      );
+
   @override
   void dispose() {
     _latController.dispose();
@@ -663,14 +668,20 @@ class _SettingsCardState extends State<_SettingsCard> {
             SizedBox(
               width: double.infinity,
               child: FilledButton(
-                onPressed: _changed && !_saving ? _save : null,
+                onPressed: _canEdit && _changed && !_saving ? _save : null,
                 child: _saving
                     ? const SizedBox(
                         width: 18,
                         height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : Text(_changed ? "บันทึก" : "บันทึกแล้ว"),
+                    : Text(
+                        !_canEdit
+                            ? "ดูอย่างเดียว (ไม่มีสิทธิ์แก้ไข)"
+                            : _changed
+                                ? "บันทึก"
+                                : "บันทึกแล้ว",
+                      ),
               ),
             ),
           ],

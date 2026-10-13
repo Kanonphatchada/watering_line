@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/device_groups.dart';
+import '../services/my_devices.dart';
 import '../widgets/device_grid.dart';
 import '../widgets/group_style.dart';
 import 'device_groups_page.dart';
@@ -22,14 +23,11 @@ class GroupDetailPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser!.uid;
 
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('ESP32')
-          .where('uid', isEqualTo: uid)
-          .snapshots(),
+    return StreamBuilder<List<QueryDocumentSnapshot>>(
+      stream: watchMyDevices(uid),
       builder: (context, deviceSnap) {
         return StreamBuilder<List<DeviceGroup>>(
-          stream: watchDeviceGroups(uid),
+          stream: watchMyGroups(uid),
           builder: (context, groupSnap) {
             if (deviceSnap.hasError || groupSnap.hasError) {
               return Scaffold(
@@ -48,7 +46,7 @@ class GroupDetailPage extends StatelessWidget {
               );
             }
 
-            final allDocs = deviceSnap.data!.docs;
+            final allDocs = deviceSnap.data!;
             final groups = pruneMissingDevices(
               groupSnap.data!,
               allDocs.map((d) => d.id).toSet(),
@@ -100,7 +98,9 @@ class GroupDetailPage extends StatelessWidget {
                   ],
                 ),
                 actions: [
-                  if (!_isUngrouped) ...[
+                  if (!_isUngrouped &&
+                      editableFarmIds(allDocs, uid)
+                          .contains(group!.farmId)) ...[
                     IconButton(
                       tooltip: "แก้ไขกลุ่ม",
                       icon: const Icon(Icons.edit_outlined),
@@ -146,7 +146,9 @@ class GroupDetailPage extends StatelessWidget {
                               ),
                               const SizedBox(height: 8),
                               const Text("ยังไม่มีอุปกรณ์ในกลุ่มนี้"),
-                              if (!_isUngrouped)
+                              if (!_isUngrouped &&
+                                  editableFarmIds(allDocs, uid)
+                                      .contains(group!.farmId))
                                 TextButton(
                                   onPressed: () => openGroupEditor(
                                     context,
