@@ -24,6 +24,28 @@ void main() {
     });
   });
 
+  group('reversePlaceLabel', () {
+    test('ตัดชื่อซ้ำ และไม่ใส่ประเทศถ้าเป็นไทย', () {
+      expect(
+        reversePlaceLabel({
+          'locality': 'แขวงบางไผ่',
+          'city': 'กรุงเทพมหานคร',
+          'principalSubdivision': 'กรุงเทพมหานคร',
+          'countryName': 'ประเทศไทย',
+        }),
+        'แขวงบางไผ่, กรุงเทพมหานคร',
+      );
+    });
+
+    test('ต่างประเทศใส่ชื่อประเทศ / ไม่มีข้อมูลคืน null', () {
+      expect(
+        reversePlaceLabel({'city': 'Vientiane', 'countryName': 'Laos'}),
+        'Vientiane, Laos',
+      );
+      expect(reversePlaceLabel({'locality': '', 'countryName': ''}), isNull);
+    });
+  });
+
   group('ข้อความเวลา', () {
     test('ระยะเวลาเป็นนาที/ชม./วัน แทนนาทีล้วน', () {
       expect(relativeTimeThai(now.subtract(const Duration(seconds: 30)), now),

@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../shared/widgets/app_popup.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -92,7 +94,10 @@ class _WeatherBody extends StatelessWidget {
 
         final status = _StatusHero(registry: reg);
         final forecast = _HourlyStrip(lat: lat, lon: lon);
-        final settings = _SettingsCard(groupId: groupId, registry: reg);
+        // key ตามฟาร์ม — สลับฟาร์มแล้วต้องเริ่ม state ใหม่ ไม่งั้นช่องพิกัด/
+        // ชื่อสถานที่ยังค้างค่าของฟาร์มก่อนหน้า
+        final settings = _SettingsCard(
+            key: ValueKey(groupId), groupId: groupId, registry: reg);
 
         return LayoutBuilder(builder: (context, c) {
           if (c.maxWidth >= 900) {
@@ -433,7 +438,8 @@ class _SettingsCard extends StatefulWidget {
   final String groupId;
   final Map<String, dynamic> registry;
 
-  const _SettingsCard({required this.groupId, required this.registry});
+  const _SettingsCard(
+      {super.key, required this.groupId, required this.registry});
 
   @override
   State<_SettingsCard> createState() => _SettingsCardState();
@@ -450,7 +456,11 @@ class _SettingsCardState extends State<_SettingsCard> {
   final _placeController = TextEditingController();
   List<Map<String, dynamic>> _results = [];
   String? _placeError;
-  String? _pickedPlace;
+  // ชื่อสถานที่ของพิกัดที่อยู่ในช่องตอนนี้ — จากผลค้นหาที่เลือก หรือแปลงกลับ
+  // จากพิกัด (reversePlaceName) ถ้ามาจากตำแหน่งปัจจุบัน/กรอกเอง/ค่าที่บันทึกไว้
+  String? _placeName;
+  bool _resolvingPlace = false;
+  Timer? _resolveDebounce;
   bool _searching = false;
   bool _saving = false;
 
@@ -461,11 +471,47 @@ class _SettingsCardState extends State<_SettingsCard> {
       );
 
   @override
+  void initState() {
+    super.initState();
+    _resolvePlace();
+  }
+
+  @override
   void dispose() {
+    _resolveDebounce?.cancel();
     _latController.dispose();
     _lonController.dispose();
     _placeController.dispose();
     super.dispose();
+  }
+
+  Future<void> _resolvePlace() async {
+    if (!_validCoords) {
+      setState(() => _placeName = null);
+      return;
+    }
+    final lat = _lat!, lon = _lon!;
+    setState(() => _resolvingPlace = true);
+    String? name;
+    try {
+      name = await reversePlaceName(lat, lon);
+    } catch (_) {
+      name = null; // ไม่ได้ชื่อก็ยังโชว์พิกัดอยู่ ไม่ต้องเตือน
+    }
+    // ผู้ใช้อาจเปลี่ยนพิกัดไปแล้วระหว่างรอ — ทิ้งผลเก่า
+    if (!mounted || _lat != lat || _lon != lon) return;
+    setState(() {
+      _placeName = name;
+      _resolvingPlace = false;
+    });
+  }
+
+  // พิมพ์พิกัดเองทีละตัว — รอหยุดพิมพ์ก่อนค่อยแปลงเป็นชื่อ
+  void _onCoordTyped() {
+    setState(() => _placeName = null);
+    _resolveDebounce?.cancel();
+    _resolveDebounce =
+        Timer(const Duration(milliseconds: 700), () => _resolvePlace());
   }
 
   double? get _lat => double.tryParse(_latController.text.trim());
@@ -515,9 +561,9 @@ class _SettingsCardState extends State<_SettingsCard> {
     setState(() {
       _latController.text = '${pos['lat']}';
       _lonController.text = '${pos['lon']}';
-      _pickedPlace = "ตำแหน่งปัจจุบัน";
       _results = [];
     });
+    _resolvePlace();
   }
 
   Future<void> _save() async {
@@ -579,13 +625,13 @@ class _SettingsCardState extends State<_SettingsCard> {
                 ),
               ],
             ),
-            const SizedBox(height: 6),
-            Text(
-              _validCoords
-                  ? "${_pickedPlace != null ? '$_pickedPlace · ' : ''}"
-                      "${_lat!.toStringAsFixed(4)}, ${_lon!.toStringAsFixed(4)}"
-                  : "ยังไม่ได้ตั้งพิกัด",
-              style: TextStyle(fontSize: 13, color: muted),
+            const SizedBox(height: 8),
+            _LocationSummary(
+              lat: _validCoords ? _lat : null,
+              lon: _validCoords ? _lon : null,
+              placeName: _placeName,
+              resolving: _resolvingPlace,
+              saved: !_changed,
             ),
             const SizedBox(height: 12),
             Row(
@@ -626,9 +672,11 @@ class _SettingsCardState extends State<_SettingsCard> {
                       avatar: const Icon(Icons.place, size: 16),
                       label: Text(placeLabel(r)),
                       onPressed: () => setState(() {
+                        _resolveDebounce?.cancel();
                         _latController.text = '${r['latitude']}';
                         _lonController.text = '${r['longitude']}';
-                        _pickedPlace = r['name'] as String?;
+                        _placeName = placeLabel(r);
+                        _resolvingPlace = false;
                         _results = [];
                       }),
                     ),
@@ -655,7 +703,7 @@ class _SettingsCardState extends State<_SettingsCard> {
                       Expanded(
                         child: TextField(
                           controller: _latController,
-                          onChanged: (_) => setState(() => _pickedPlace = null),
+                          onChanged: (_) => _onCoordTyped(),
                           keyboardType: const TextInputType.numberWithOptions(
                               decimal: true, signed: true),
                           decoration: const InputDecoration(
@@ -668,7 +716,7 @@ class _SettingsCardState extends State<_SettingsCard> {
                       Expanded(
                         child: TextField(
                           controller: _lonController,
-                          onChanged: (_) => setState(() => _pickedPlace = null),
+                          onChanged: (_) => _onCoordTyped(),
                           keyboardType: const TextInputType.numberWithOptions(
                               decimal: true, signed: true),
                           decoration: const InputDecoration(
@@ -705,6 +753,116 @@ class _SettingsCardState extends State<_SettingsCard> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// กล่องสรุปตำแหน่งฟาร์ม: ชื่อสถานที่ตัวใหญ่ + พิกัดตัวเล็ก + สถานะว่าบันทึก
+// แล้วหรือยัง + ลิงก์เปิดแผนที่ไว้เช็คด้วยตาว่าปักหมุดถูกที่
+class _LocationSummary extends StatelessWidget {
+  final double? lat;
+  final double? lon;
+  final String? placeName;
+  final bool resolving;
+  final bool saved;
+
+  const _LocationSummary({
+    required this.lat,
+    required this.lon,
+    required this.placeName,
+    required this.resolving,
+    required this.saved,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final muted = Theme.of(context).textTheme.bodySmall?.color;
+
+    if (lat == null || lon == null) {
+      return Text(
+        "ยังไม่ได้ตั้งตำแหน่ง — ค้นหาชื่ออำเภอ/จังหวัด หรือใช้ตำแหน่งปัจจุบัน",
+        style: TextStyle(fontSize: 13, color: muted),
+      );
+    }
+
+    final statusColor = saved ? Colors.green.shade600 : Colors.orange.shade700;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: statusColor.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.place, size: 20, color: scheme.primary),
+              const SizedBox(width: 6),
+              Expanded(
+                child: resolving
+                    ? Text("กำลังหาชื่อสถานที่...",
+                        style: TextStyle(fontSize: 14, color: muted))
+                    : Text(
+                        placeName ?? "พิกัดที่เลือก",
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.only(left: 26),
+            child: Text(
+              "${lat!.toStringAsFixed(4)}, ${lon!.toStringAsFixed(4)}",
+              style: TextStyle(fontSize: 12, color: muted),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(
+                saved ? Icons.check_circle : Icons.pending_outlined,
+                size: 16,
+                color: statusColor,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                saved
+                    ? "บันทึกตำแหน่งนี้แล้ว"
+                    : "ยังไม่ได้บันทึก — กดบันทึกด้านล่าง",
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: statusColor,
+                ),
+              ),
+              const Spacer(),
+              TextButton.icon(
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                ),
+                onPressed: () => launchUrl(
+                  Uri.parse(
+                    'https://www.google.com/maps/search/?api=1&query=$lat,$lon',
+                  ),
+                  mode: LaunchMode.externalApplication,
+                ),
+                icon: const Icon(Icons.map_outlined, size: 16),
+                label: const Text("ดูบนแผนที่", style: TextStyle(fontSize: 12)),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
