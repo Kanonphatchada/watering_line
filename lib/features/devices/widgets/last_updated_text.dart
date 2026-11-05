@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../utils/time_text.dart';
 
 class LastUpdatedText extends StatefulWidget {
   final String nanoId;
@@ -54,39 +55,16 @@ class LastUpdatedTextState extends State<LastUpdatedText> {
     if (oldWidget.nanoId != widget.nanoId) _latestLog = _logStream();
   }
 
-  // คำสั้นๆ ให้ทั้งบรรทัดพอดีหัวการ์ด ("56 นาทีก่อน" แทน "56 นาทีที่แล้ว")
-  String _relativeTime(DateTime time) {
-    final diff = DateTime.now().difference(time);
-    if (diff.inMinutes < 1) return "เมื่อสักครู่";
-    if (diff.inMinutes < 60) return "${diff.inMinutes} นาทีก่อน";
-    if (diff.inHours < 24) return "${diff.inHours} ชม.ก่อน";
-    return "${diff.inDays} วันก่อน";
-  }
-
-  static const _thaiMonths = [
-    'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', //
-    'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.',
-  ];
-
-  // เวลาจริงของการอัปเดต (เวลาเครื่องผู้ใช้) ให้เทียบกับนาฬิกาตัวเองได้ —
-  // วันนี้โชว์แค่ "15:43 น." วันอื่นเติมวันที่ "29 ก.ย. 15:43 น."
-  String _clockTime(DateTime time) {
-    final now = DateTime.now();
-    final hhmm = "${time.hour.toString().padLeft(2, '0')}:"
-        "${time.minute.toString().padLeft(2, '0')} น.";
-    final sameDay =
-        time.year == now.year && time.month == now.month && time.day == now.day;
-    return sameDay ? hhmm : "${time.day} ${_thaiMonths[time.month - 1]} $hhmm";
-  }
-
   // แสดง Row เดิมเสมอไม่ว่าจะมีข้อมูลหรือไม่ (แค่เปลี่ยนข้อความ) กันสัดส่วน
   // การ์ดเพี้ยนไปเทียบกับอุปกรณ์ตัวอื่นที่มีข้อมูลอยู่แล้ว — บรรทัดเดียวเสมอ
   // ถ้ายาวเกินที่ว่าง (เช่นมีวันที่ด้วย) ตัวอักษรย่อลงเล็กน้อยแทนการขึ้นบรรทัดใหม่
   Widget _buildText(BuildContext context, Timestamp? ts) {
     final color = Theme.of(context).textTheme.bodySmall?.color;
+    final now = DateTime.now();
     final text = ts == null
         ? "ยังไม่มีข้อมูล"
-        : "${_clockTime(ts.toDate())} · ${_relativeTime(ts.toDate())}";
+        : "${clockTimeThai(ts.toDate(), now)} · "
+            "${relativeTimeThai(ts.toDate(), now)}";
 
     return Tooltip(
       message: ts == null ? text : "อัปเดตล่าสุด $text",

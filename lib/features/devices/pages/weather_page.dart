@@ -6,6 +6,7 @@ import '../../../shared/web/web_utils.dart';
 import '../services/my_devices.dart';
 import '../services/farm_members.dart';
 import '../services/rain_skip.dart';
+import '../utils/time_text.dart';
 import '../widgets/farm_selector.dart';
 
 const _weatherColor = Color(0xFF00897B); // สีเดียวกับการ์ดพยากรณ์ที่หน้าหลัก
@@ -140,6 +141,8 @@ class _StatusHero extends StatelessWidget {
     final enabled = registry['rainSkipEnabled'] == true;
     final rain = registry['_rainForecast'] == true;
     final checkedAt = (registry['_weatherCheckedAt'] as Timestamp?)?.toDate();
+    final now = DateTime.now();
+    final stale = checkedAt != null && isRainCheckStale(checkedAt, now);
 
     final (IconData icon, Color color, String title, String subtitle) = !enabled
         ? (
@@ -148,25 +151,41 @@ class _StatusHero extends StatelessWidget {
             "ยังไม่ได้เปิดใช้",
             "เปิด \"ข้ามรดน้ำเมื่อฝนจะตก\" ด้านล่าง เพื่อประหยัดน้ำตอนฝนตก",
           )
-        : rain
+        : checkedAt == null
             ? (
-                Icons.thunderstorm,
-                _rainColor,
-                "ฝนอาจตกเร็วๆ นี้",
-                "ระบบข้ามการรดน้ำอัตโนมัติรอบนี้",
+                Icons.hourglass_empty,
+                Theme.of(context).colorScheme.outline,
+                "รอระบบเช็คฝนครั้งแรก",
+                "ระบบจะเช็คพยากรณ์ในรอบตรวจถัดไป (ประมาณ 15 นาที)",
               )
-            : (
-                Icons.wb_sunny_outlined,
-                _weatherColor,
-                "ไม่มีฝนใน 3 ชม.ข้างหน้า",
-                "รดน้ำอัตโนมัติตามปกติ",
-              );
+            // ผลเก่าค้างไว้เชื่อไม่ได้ — ไม่บอก "ไม่มีฝน"/"ข้ามรอบนี้" จากค่าเก่า
+            : stale
+                ? (
+                    Icons.sync_problem,
+                    Colors.orange.shade700,
+                    "ข้อมูลฝนไม่อัปเดต",
+                    "ระบบไม่ได้เช็คพยากรณ์ฝนมานาน ตอนนี้อาจไม่ข้ามรดน้ำแม้ฝนจะตก"
+                        " — แจ้งผู้ดูแลระบบให้ตรวจสอบ",
+                  )
+                : rain
+                    ? (
+                        Icons.thunderstorm,
+                        _rainColor,
+                        "ฝนอาจตกเร็วๆ นี้",
+                        "ระบบข้ามการรดน้ำอัตโนมัติรอบนี้",
+                      )
+                    : (
+                        Icons.wb_sunny_outlined,
+                        _weatherColor,
+                        "ไม่มีฝนใน 3 ชม.ข้างหน้า",
+                        "รดน้ำอัตโนมัติตามปกติ",
+                      );
 
     String? checkedText;
     if (enabled && checkedAt != null) {
-      final mins = DateTime.now().difference(checkedAt).inMinutes;
-      checkedText =
-          mins < 1 ? "เช็คล่าสุดเมื่อสักครู่" : "เช็คล่าสุด $mins นาทีก่อน";
+      // บอกให้ชัดว่าเช็คอะไร เมื่อไหร่ — เดิม "เช็คล่าสุด 24020 นาทีก่อน"
+      checkedText = "เช็คพยากรณ์ฝนล่าสุด ${clockTimeThai(checkedAt, now)}"
+          " (${relativeTimeThai(checkedAt, now)})";
     }
 
     return Card(

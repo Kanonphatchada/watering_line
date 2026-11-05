@@ -42,6 +42,14 @@ Future<void> saveRainSkip(
       if (enabled) 'farmLon': lon,
     });
 
+// backend เช็คพยากรณ์ทุกรอบ cron (10-15 นาที, cache 20 นาที) ถ้า
+// _weatherCheckedAt เก่ากว่านี้แปลว่ารอบเช็คไม่ได้ทำงาน (เช่น cron หยุด) —
+// ผล _rainForecast ที่ค้างอยู่เชื่อไม่ได้ อย่าบอกผู้ใช้ว่า "ไม่มีฝน"
+const rainCheckStaleAfter = Duration(hours: 1);
+
+bool isRainCheckStale(DateTime checkedAt, DateTime now) =>
+    now.difference(checkedAt) > rainCheckStaleAfter;
+
 class HourlyForecast {
   final DateTime time;
   final int rainProbability; // %
