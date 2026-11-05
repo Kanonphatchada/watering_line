@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shimmer/shimmer.dart';
 import '../pages/weather_page.dart';
 import '../services/my_devices.dart';
+import '../services/rain_skip.dart';
 
 class HomeSkeleton extends StatelessWidget {
   const HomeSkeleton({super.key});
@@ -160,13 +161,28 @@ class WeatherForecastCard extends StatelessWidget {
           color = Theme.of(context).colorScheme.outline;
           status = "ยังไม่เปิดใช้";
         } else {
-          final rainSoon = enabled.any(
+          // ผลที่ backend เช็คไว้นานแล้ว (หรือยังไม่เคยเช็ค) เชื่อไม่ได้ —
+          // ไม่นับเป็น "ฝนอาจตก"/"ไม่มีฝน" แต่บอกว่าข้อมูลไม่อัปเดต
+          final now = DateTime.now();
+          bool isFresh(QueryDocumentSnapshot d) {
+            final checkedAt = ((d.data()
+                    as Map<String, dynamic>)['_weatherCheckedAt'] as Timestamp?)
+                ?.toDate();
+            return checkedAt != null && !isRainCheckStale(checkedAt, now);
+          }
+
+          final fresh = enabled.where(isFresh).toList();
+          final rainSoon = fresh.any(
             (d) => (d.data() as Map<String, dynamic>)['_rainForecast'] == true,
           );
           if (rainSoon) {
             icon = Icons.thunderstorm;
             color = weatherColor;
             status = "ฝนอาจตก";
+          } else if (fresh.length < enabled.length) {
+            icon = Icons.sync_problem;
+            color = Colors.orange.shade700;
+            status = "ไม่อัปเดต";
           } else {
             icon = Icons.wb_sunny_outlined;
             color = weatherColor;
