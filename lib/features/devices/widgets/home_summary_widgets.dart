@@ -60,45 +60,56 @@ class SummaryBar extends StatelessWidget {
   Widget build(BuildContext context) {
     const okColor = Color(0xFF2E7D32);
 
+    final cards = <Widget>[
+      _KpiCard(
+        icon: Icons.sensors,
+        iconColor: okColor,
+        label: "อุปกรณ์ทั้งหมด",
+        numericValue: totalDevices.toDouble(),
+        format: (v) => v.round().toString(),
+      ),
+      WeatherForecastCard(docs: docs),
+      _KpiCard(
+        icon: Icons.water_drop,
+        iconColor: const Color(0xFF1E88E5),
+        label: "ความชื้นเฉลี่ย",
+        numericValue: avgMoisture,
+        format: (v) => v.toStringAsFixed(1),
+      ),
+      _KpiCard(
+        icon: Icons.warning_amber_rounded,
+        // ไม่ใช้เขียวตอนไม่มีแจ้งเตือน กันซ้ำกับสีการ์ด "อุปกรณ์ทั้งหมด"
+        iconColor:
+            alertCount > 0 ? Colors.red : Theme.of(context).colorScheme.outline,
+        label: "แจ้งเตือน",
+        numericValue: alertCount.toDouble(),
+        format: (v) => v.round().toString(),
+      ),
+    ];
+
+    Widget row(List<Widget> items) => Row(
+          children: [
+            for (final (i, c) in items.indexed) ...[
+              if (i > 0) const SizedBox(width: 10),
+              Expanded(child: c),
+            ],
+          ],
+        );
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-      child: Row(
-        children: [
-          Expanded(
-            child: _KpiCard(
-              icon: Icons.sensors,
-              iconColor: okColor,
-              label: "อุปกรณ์ทั้งหมด",
-              numericValue: totalDevices.toDouble(),
-              format: (v) => v.round().toString(),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(child: WeatherForecastCard(docs: docs)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _KpiCard(
-              icon: Icons.water_drop,
-              iconColor: const Color(0xFF1E88E5),
-              label: "ความชื้นเฉลี่ย",
-              numericValue: avgMoisture,
-              format: (v) => v.toStringAsFixed(1),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _KpiCard(
-              icon: Icons.warning_amber_rounded,
-              // ไม่ใช้เขียวตอนไม่มีแจ้งเตือน กันซ้ำกับสีการ์ด "อุปกรณ์ทั้งหมด"
-              iconColor: alertCount > 0
-                  ? Colors.red
-                  : Theme.of(context).colorScheme.outline,
-              label: "แจ้งเตือน",
-              numericValue: alertCount.toDouble(),
-              format: (v) => v.round().toString(),
-            ),
-          ),
-        ],
+      // จอแคบ (มือถือ) 4 ใบในแถวเดียวเหลือใบละ ~65px ตัวหนังสือเบียดกัน —
+      // แบ่งเป็น 2 แถว แถวละ 2 ใบแทน
+      child: LayoutBuilder(
+        builder: (context, constraints) => constraints.maxWidth < 560
+            ? Column(
+                children: [
+                  row(cards.sublist(0, 2)),
+                  const SizedBox(height: 10),
+                  row(cards.sublist(2)),
+                ],
+              )
+            : row(cards),
       ),
     );
   }

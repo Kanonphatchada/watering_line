@@ -286,9 +286,11 @@ class _HomePageState extends State<HomePage> {
             );
           }
 
-          return Row(
-            children: [
-              SideNavRail(
+          // มือถือ (< 600px): ซ่อนแถบเมนูซ้ายไว้ใน drawer เปิดด้วยปุ่ม ☰ ที่
+          // แถบบน ไม่งั้นแถบกว้าง 72px + แถวค้นหาทำให้เนื้อหาล้นจอ
+          final compact = MediaQuery.sizeOf(context).width < 600;
+          Widget nav({bool asDrawer = false}) => SideNavRail(
+                asDrawer: asDrawer,
                 onAddDevice: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const AddDevicePage()),
@@ -314,27 +316,36 @@ class _HomePageState extends State<HomePage> {
                   context,
                   MaterialPageRoute(builder: (_) => const ProfilePage()),
                 ),
-              ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _TopBar(
-                      uid: uid,
-                      user: user,
-                      greeting: _greeting(),
-                      searchController: _searchController,
-                      onSearchChanged: (v) => setState(() => _searchQuery = v),
-                      onAddDevice: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const AddDevicePage()),
-                      ),
-                    ),
-                    Expanded(child: content),
-                  ],
+              );
+
+          final body = Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _TopBar(
+                uid: uid,
+                user: user,
+                greeting: _greeting(),
+                compact: compact,
+                searchController: _searchController,
+                onSearchChanged: (v) => setState(() => _searchQuery = v),
+                onAddDevice: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AddDevicePage()),
                 ),
               ),
+              Expanded(child: content),
+            ],
+          );
+
+          // Scaffold ซ้อนข้างใน เพราะเมนูต้องใช้ docs จาก stream นี้ — ปุ่ม ☰
+          // ใน _TopBar หา Scaffold ตัวนี้เจอก่อน
+          if (compact) {
+            return Scaffold(drawer: nav(asDrawer: true), body: body);
+          }
+          return Row(
+            children: [
+              nav(),
+              Expanded(child: body),
             ],
           );
         },
@@ -550,6 +561,9 @@ class _TopBar extends StatelessWidget {
   final String uid;
   final User user;
   final String greeting;
+  // มือถือ: มีปุ่ม ☰ เปิดเมนู, ช่องค้นหาลงไปเป็นแถวเต็มความกว้าง,
+  // ปุ่มเพิ่มอุปกรณ์เหลือแค่ไอคอน
+  final bool compact;
   final TextEditingController searchController;
   final ValueChanged<String> onSearchChanged;
   final VoidCallback onAddDevice;
@@ -558,6 +572,7 @@ class _TopBar extends StatelessWidget {
     required this.uid,
     required this.user,
     required this.greeting,
+    required this.compact,
     required this.searchController,
     required this.onSearchChanged,
     required this.onAddDevice,
@@ -565,14 +580,32 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final search = TextField(
+      controller: searchController,
+      onChanged: onSearchChanged,
+      decoration: const InputDecoration(
+        isDense: true,
+        hintText: "ค้นหาอุปกรณ์...",
+        prefixIcon: Icon(Icons.search, size: 20),
+      ),
+    );
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+      padding: compact
+          ? const EdgeInsets.fromLTRB(8, 12, 16, 4)
+          : const EdgeInsets.fromLTRB(20, 20, 20, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // แถวบน: หัวข้อเล็กจางๆ + ค้นหา + กระดิ่ง + โปรไฟล์
           Row(
             children: [
+              if (compact)
+                IconButton(
+                  tooltip: "เมนู",
+                  icon: const Icon(Icons.menu),
+                  onPressed: () => Scaffold.of(context).openDrawer(),
+                ),
               Text(
                 "แดชบอร์ด",
                 style: TextStyle(
@@ -582,18 +615,11 @@ class _TopBar extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 260),
-                child: TextField(
-                  controller: searchController,
-                  onChanged: onSearchChanged,
-                  decoration: const InputDecoration(
-                    isDense: true,
-                    hintText: "ค้นหาอุปกรณ์...",
-                    prefixIcon: Icon(Icons.search, size: 20),
-                  ),
+              if (!compact)
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 260),
+                  child: search,
                 ),
-              ),
               const SizedBox(width: 12),
               _AlertBell(uid: uid),
               const SizedBox(width: 12),
@@ -620,7 +646,11 @@ class _TopBar extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          if (compact) ...[
+            const SizedBox(height: 8),
+            Padding(padding: const EdgeInsets.only(left: 8), child: search),
+          ],
+          SizedBox(height: compact ? 16 : 20),
           // แถวล่าง: คำทักทาย + ปุ่มเพิ่มอุปกรณ์
           Row(
             children: [
@@ -659,11 +689,18 @@ class _TopBar extends StatelessWidget {
                   },
                 ),
               ),
-              FilledButton.icon(
-                onPressed: onAddDevice,
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text("เพิ่มอุปกรณ์"),
-              ),
+              if (compact)
+                IconButton.filled(
+                  tooltip: "เพิ่มอุปกรณ์",
+                  onPressed: onAddDevice,
+                  icon: const Icon(Icons.add),
+                )
+              else
+                FilledButton.icon(
+                  onPressed: onAddDevice,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text("เพิ่มอุปกรณ์"),
+                ),
             ],
           ),
         ],

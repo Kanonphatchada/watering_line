@@ -3,7 +3,10 @@ import '../../../main.dart' show themeModeNotifier, toggleThemeMode;
 
 // แถบไอคอนถาวรด้านซ้าย แทนที่เมนู hamburger + drawer เดิม — เหมาะกับหน้าจอ
 // กว้างแบบเว็บ เข้าถึงเมนูหลักได้ทันทีโดยไม่ต้องกดเปิด/ปิดอีกต่อไป
+// บนมือถือ (asDrawer) แถบกว้าง 72px กินจอเกือบ 1/5 และไอคอนล้นจอเตี้ย จึงใช้
+// เมนูชุดเดียวกันแต่แสดงเป็น Drawer มีชื่อเมนูกำกับแทน
 class SideNavRail extends StatefulWidget {
+  final bool asDrawer;
   final VoidCallback onAddDevice;
   final VoidCallback onSchedule;
   final VoidCallback onWeather;
@@ -15,6 +18,7 @@ class SideNavRail extends StatefulWidget {
 
   const SideNavRail({
     super.key,
+    this.asDrawer = false,
     required this.onAddDevice,
     required this.onSchedule,
     required this.onWeather,
@@ -30,8 +34,85 @@ class SideNavRail extends StatefulWidget {
 }
 
 class _SideNavRailState extends State<SideNavRail> {
+  // เมนูหลัก (ไม่รวมโหมดมืด/โปรไฟล์ที่อยู่ล่างสุด) — ใช้ร่วมกันทั้ง rail และ drawer
+  List<(IconData, String, VoidCallback, Color?)> get _mainItems => [
+        (
+          Icons.add_circle_outline_rounded,
+          "เพิ่มอุปกรณ์",
+          widget.onAddDevice,
+          null
+        ),
+        // ตารางเวลา/พยากรณ์อากาศ เป็นหน้าของตัวเองแล้ว (SchedulePage /
+        // WeatherPage) ไม่ใช่แผงเมนูย่อยเด้งออกมาเหมือนเดิม
+        (Icons.schedule, "ตารางเวลา", widget.onSchedule, null),
+        (Icons.cloud_outlined, "พยากรณ์อากาศ", widget.onWeather, null),
+        (Icons.local_florist_outlined, "ชนิดพืช", widget.onPlantProfile, null),
+        (Icons.folder_copy_outlined, "กลุ่มอุปกรณ์", widget.onGroups, null),
+        (Icons.group_outlined, "สมาชิกของฟาร์ม", widget.onMembers, null),
+        (Icons.delete_outline, "ลบอุปกรณ์", widget.onRemoveDevice, Colors.red),
+      ];
+
+  Widget _buildDrawer(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    // ปิด drawer ก่อนค่อยเปิดหน้าใหม่ — กลับมาแล้วจะไม่เจอ drawer ค้างอยู่
+    VoidCallback closeThen(VoidCallback action) => () {
+          Navigator.pop(context);
+          action();
+        };
+
+    return Drawer(
+      child: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          children: [
+            ListTile(
+              leading: Icon(Icons.eco_rounded, color: scheme.primary, size: 28),
+              title: const Text(
+                "WateringLine",
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+            const Divider(),
+            ListTile(
+              leading: Icon(Icons.grid_view_rounded, color: scheme.primary),
+              title: const Text("หน้าหลัก"),
+              selected: true,
+              onTap: () => Navigator.pop(context),
+            ),
+            for (final (icon, label, onTap, color) in _mainItems)
+              ListTile(
+                leading: Icon(icon, color: color),
+                title: Text(label, style: TextStyle(color: color)),
+                onTap: closeThen(onTap),
+              ),
+            const Divider(),
+            ValueListenableBuilder<ThemeMode>(
+              valueListenable: themeModeNotifier,
+              builder: (context, mode, _) {
+                final nowDark = mode == ThemeMode.dark;
+                return ListTile(
+                  leading: Icon(nowDark
+                      ? Icons.light_mode_outlined
+                      : Icons.dark_mode_outlined),
+                  title: Text(nowDark ? "โหมดสว่าง" : "โหมดมืด"),
+                  onTap: toggleThemeMode,
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.person_outline_rounded),
+              title: const Text("โปรไฟล์"),
+              onTap: closeThen(widget.onProfile),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (widget.asDrawer) return _buildDrawer(context);
     final scheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final railColor =
@@ -55,51 +136,15 @@ class _SideNavRailState extends State<SideNavRail> {
                   active: true,
                   onTap: () {},
                 ),
-                const SizedBox(height: 4),
-                _NavIcon(
-                  icon: Icons.add_circle_outline_rounded,
-                  tooltip: "เพิ่มอุปกรณ์",
-                  onTap: widget.onAddDevice,
-                ),
-                const SizedBox(height: 4),
-                // ตารางเวลา/พยากรณ์อากาศ เป็นหน้าของตัวเองแล้ว (SchedulePage /
-                // WeatherPage) ไม่ใช่แผงเมนูย่อยเด้งออกมาเหมือนเดิม
-                _NavIcon(
-                  icon: Icons.schedule,
-                  tooltip: "ตารางเวลา",
-                  onTap: widget.onSchedule,
-                ),
-                const SizedBox(height: 4),
-                _NavIcon(
-                  icon: Icons.cloud_outlined,
-                  tooltip: "พยากรณ์อากาศ",
-                  onTap: widget.onWeather,
-                ),
-                const SizedBox(height: 4),
-                _NavIcon(
-                  icon: Icons.local_florist_outlined,
-                  tooltip: "ชนิดพืช",
-                  onTap: widget.onPlantProfile,
-                ),
-                const SizedBox(height: 4),
-                _NavIcon(
-                  icon: Icons.folder_copy_outlined,
-                  tooltip: "กลุ่มอุปกรณ์",
-                  onTap: widget.onGroups,
-                ),
-                const SizedBox(height: 4),
-                _NavIcon(
-                  icon: Icons.group_outlined,
-                  tooltip: "สมาชิกของฟาร์ม",
-                  onTap: widget.onMembers,
-                ),
-                const SizedBox(height: 4),
-                _NavIcon(
-                  icon: Icons.delete_outline,
-                  tooltip: "ลบอุปกรณ์",
-                  onTap: widget.onRemoveDevice,
-                  color: Colors.red,
-                ),
+                for (final (icon, label, onTap, color) in _mainItems) ...[
+                  const SizedBox(height: 4),
+                  _NavIcon(
+                    icon: icon,
+                    tooltip: label,
+                    onTap: onTap,
+                    color: color,
+                  ),
+                ],
                 const Spacer(),
                 ValueListenableBuilder<ThemeMode>(
                   valueListenable: themeModeNotifier,
