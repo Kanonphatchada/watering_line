@@ -38,6 +38,9 @@
   ],
 
   "hosting": {
+    "predeploy": [
+      "flutter build web --release --pwa-strategy=none"
+    ],
     "public": "build/web",
     "ignore": [
       "firebase.json",
