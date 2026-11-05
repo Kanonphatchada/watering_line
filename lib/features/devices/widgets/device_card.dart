@@ -86,10 +86,12 @@ class DeviceCardState extends State<DeviceCard>
     final currentTarget = _currentTarget;
     final moisture = (data['Moisture'] ?? 0).toDouble();
     final automois = (data['Automois'] ?? 20).toDouble();
-    final isAlert = isMoistureAlert(moisture, automois);
+    // ไม่ได้ใช้งาน = ค่าความชื้นที่มีไม่ใช่ของจริง ไม่ต้องเตือนดินแห้ง/ผิดปกติ
+    final isDormant = data['dormant'] == true;
+    final isAlert = !isDormant && isMoistureAlert(moisture, automois);
     final isOffline = data['offline'] == true;
     final faultType = data['faultType'] as String?;
-    final hasValveFault = !isOffline && faultType != null;
+    final hasValveFault = !isDormant && !isOffline && faultType != null;
 
     // สิทธิ์ของผู้ใช้บนอุปกรณ์นี้ (เจ้าของได้ทุกอย่าง สมาชิกตามที่เจ้าของตั้ง) —
     // ปิดปุ่มที่ไม่มีสิทธิ์ไว้ตั้งแต่ต้น แทนที่จะปล่อยให้กดแล้วโดนกฎปฏิเสธเงียบๆ
@@ -113,7 +115,7 @@ class DeviceCardState extends State<DeviceCard>
                   height: 44,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: isOffline
+                    color: isDormant || isOffline
                         ? Colors.grey.shade200
                         : (hasValveFault
                             ? Colors.orange.shade50
@@ -122,12 +124,14 @@ class DeviceCardState extends State<DeviceCard>
                                 : const Color(0xFFE8F5E9))),
                   ),
                   child: Icon(
-                    isOffline
-                        ? Icons.cloud_off
-                        : (hasValveFault
-                            ? Icons.report_problem_outlined
-                            : Icons.water_drop),
-                    color: isOffline
+                    isDormant
+                        ? Icons.bedtime_outlined
+                        : (isOffline
+                            ? Icons.cloud_off
+                            : (hasValveFault
+                                ? Icons.report_problem_outlined
+                                : Icons.water_drop)),
+                    color: isDormant || isOffline
                         ? Colors.grey.shade600
                         : (hasValveFault
                             ? Colors.orange.shade800
@@ -194,6 +198,7 @@ class DeviceCardState extends State<DeviceCard>
                 StatusChip(
                   isAlert: isAlert,
                   isOffline: isOffline,
+                  isDormant: isDormant,
                   faultType: faultType,
                 ),
               ],
@@ -214,7 +219,7 @@ class DeviceCardState extends State<DeviceCard>
                     child: MoistureGauge(
                       moisture: data['Moisture'] as num?,
                       target: currentTarget,
-                      isOffline: isOffline,
+                      isOffline: isDormant || isOffline,
                     ),
                   ),
                   const StatDivider(),

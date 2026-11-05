@@ -120,6 +120,26 @@ void main() {
       expect(s.needsAttention, 1);
     });
 
+    test('ไม่ได้ใช้งาน (dormant) ไม่นับเป็นปัญหาและไม่รวมในค่าเฉลี่ย', () {
+      final s = computeGroupStats([
+        {'Moisture': 0, 'Automois': 20, 'dormant': true}, // ไม่เคยส่งข้อมูล
+        {'Moisture': 40, 'Automois': 20},
+      ]);
+      expect(s.count, 2);
+      expect(s.dormantCount, 1);
+      expect(s.avgMoisture, closeTo(40, 1e-9));
+      expect(s.dryCount, 0);
+      expect(s.needsAttention, 0);
+    });
+
+    test('ทุกตัวไม่ได้ใช้งาน → ไม่มีค่าเฉลี่ย', () {
+      final s = computeGroupStats([
+        {'Moisture': 0, 'dormant': true},
+      ]);
+      expect(s.avgMoisture, isNull);
+      expect(s.dormantCount, 1);
+    });
+
     test('ไม่มี Automois ใช้ค่าตั้งต้น 20 เหมือนหน้าหลัก', () {
       final s = computeGroupStats([
         {'Moisture': 19},

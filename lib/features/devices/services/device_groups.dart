@@ -172,12 +172,15 @@ List<DeviceGroup> restyleGroup(
 // สรุปสถานะของอุปกรณ์ในกลุ่มสำหรับการ์ดกลุ่ม/หน้ารายละเอียด — รับ Map ของ
 // เอกสารอุปกรณ์ตรงๆ (ไม่ผูกกับ Firestore) จะได้เทสได้ ตรรกะ "ต้องดู" เดียวกับ
 // หน้าหลัก: ดินแห้งกว่าเป้า (Automois), ขาดการติดต่อ หรือมี faultType
+// อุปกรณ์ "ไม่ได้ใช้งาน" (dormant — ไม่เคยส่งข้อมูล/เงียบเกิน 7 วัน ตาม
+// checkDevices.js) ไม่นับเป็นปัญหาและไม่รวมในค่าเฉลี่ย เพราะค่าที่มีไม่ใช่ของจริง
 class GroupStats {
   final int count;
-  final double? avgMoisture; // null ถ้าไม่มีอุปกรณ์
+  final double? avgMoisture; // null ถ้าไม่มีอุปกรณ์ที่ใช้งานอยู่
   final int dryCount;
   final int offlineCount;
   final int faultCount;
+  final int dormantCount;
   // อุปกรณ์ที่ต้องดู — นับตัวเดียวครั้งเดียวไม่ว่าจะมีปัญหากี่อย่าง
   final int needsAttention;
 
@@ -187,14 +190,19 @@ class GroupStats {
     required this.dryCount,
     required this.offlineCount,
     required this.faultCount,
+    required this.dormantCount,
     required this.needsAttention,
   });
 }
 
 GroupStats computeGroupStats(List<Map<String, dynamic>> devices) {
   var moistureSum = 0.0;
-  var dry = 0, offline = 0, fault = 0, attention = 0;
+  var dry = 0, offline = 0, fault = 0, dormant = 0, attention = 0;
   for (final d in devices) {
+    if (d['dormant'] == true) {
+      dormant++;
+      continue;
+    }
     final moisture = ((d['Moisture'] ?? 0) as num).toDouble();
     final target = ((d['Automois'] ?? 20) as num).toDouble();
     moistureSum += moisture;
@@ -208,10 +216,13 @@ GroupStats computeGroupStats(List<Map<String, dynamic>> devices) {
   }
   return GroupStats(
     count: devices.length,
-    avgMoisture: devices.isEmpty ? null : moistureSum / devices.length,
+    avgMoisture: devices.length == dormant
+        ? null
+        : moistureSum / (devices.length - dormant),
     dryCount: dry,
     offlineCount: offline,
     faultCount: fault,
+    dormantCount: dormant,
     needsAttention: attention,
   );
 }

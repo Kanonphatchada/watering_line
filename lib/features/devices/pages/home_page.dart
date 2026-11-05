@@ -131,23 +131,31 @@ class _HomePageState extends State<HomePage> {
               ),
             );
           } else {
+            // อุปกรณ์ "ไม่ได้ใช้งาน" (dormant) ไม่นับในตัวเลขสรุป/ค่าเฉลี่ย/popup
+            // เลย — ไม่เคยส่งข้อมูลหรือเงียบเกิน 7 วัน ค่าที่มีไม่ใช่ของจริง
             int alertCount = 0;
             int onlineCount = 0;
+            int inUseCount = 0;
             double moistureSum = 0;
             for (final doc in docs) {
               final data = doc.data() as Map<String, dynamic>;
+              if (data['dormant'] == true) continue;
+              inUseCount++;
               final moisture = (data['Moisture'] ?? 0).toDouble();
               final automois = (data['Automois'] ?? 20).toDouble();
               moistureSum += moisture;
               if (isMoistureAlert(moisture, automois)) alertCount++;
               if (data['offline'] != true) onlineCount++;
             }
-            final avgMoisture = moistureSum / docs.length;
+            final avgMoisture =
+                inUseCount == 0 ? 0.0 : moistureSum / inUseCount;
 
             // เด้ง popup สรุปอุปกรณ์ที่มีปัญหาอยู่ตอนนี้ทันทีที่เข้าหน้านี้ —
             // แค่ครั้งเดียวต่อการเปิดหน้า ไม่เด้งซ้ำทุกครั้งที่ stream อัปเดต
             final problems = <(String nanoId, String label)>[
-              for (final doc in docs)
+              for (final doc in docs.where(
+                (d) => (d.data() as Map<String, dynamic>)['dormant'] != true,
+              ))
                 if ((doc.data() as Map<String, dynamic>)['offline'] == true)
                   (doc.id, "ขาดการติดต่อ")
                 else if ((doc.data() as Map<String, dynamic>)['faultType'] !=
@@ -244,7 +252,7 @@ class _HomePageState extends State<HomePage> {
                           final activity = RecentActivityCard(docs: docs);
                           final health = FleetHealthCard(
                             onlineCount: onlineCount,
-                            totalCount: docs.length,
+                            totalCount: inUseCount,
                             alertCount: alertCount,
                             avgMoisture: avgMoisture,
                           );
