@@ -24,6 +24,33 @@ String placeLabel(Map<String, dynamic> r) => [
       r['country']
     ].where((e) => e != null && '$e'.isNotEmpty).join(', ');
 
+// แปลงพิกัดกลับเป็นชื่อสถานที่ ไว้โชว์ว่าพิกัดที่ตั้งไว้คือแถวไหน — เดิมโชว์แค่
+// "13.7360, 100.4053" ผู้ใช้ไม่แน่ใจว่าตั้งตำแหน่งถูก/เสร็จหรือยัง Open-Meteo
+// ไม่มี reverse geocoding เลยใช้ BigDataCloud (ฟรี ไม่ต้องมี key ออกแบบมาให้
+// เรียกจาก browser ได้ตรงๆ) คืน null ถ้าหาไม่เจอ/เรียกไม่สำเร็จ
+Future<String?> reversePlaceName(double lat, double lon) async {
+  final uri = Uri.parse(
+    'https://api.bigdatacloud.net/data/reverse-geocode-client'
+    '?latitude=$lat&longitude=$lon&localityLanguage=th',
+  );
+  final res = await http.get(uri).timeout(const Duration(seconds: 10));
+  if (res.statusCode != 200) return null;
+  return reversePlaceLabel(jsonDecode(res.body) as Map<String, dynamic>);
+}
+
+// "แขวงบางไผ่, กรุงเทพมหานคร" — ตัดชื่อที่ซ้ำกัน (city กับจังหวัดมักเป็นชื่อ
+// เดียวกัน) ไม่ใส่ประเทศถ้าเป็นไทย
+String? reversePlaceLabel(Map<String, dynamic> json) {
+  final parts = <String>[];
+  for (final key in ['locality', 'city', 'principalSubdivision']) {
+    final v = '${json[key] ?? ''}'.trim();
+    if (v.isNotEmpty && !parts.contains(v)) parts.add(v);
+  }
+  final country = '${json['countryName'] ?? ''}'.trim();
+  if (country.isNotEmpty && country != 'ประเทศไทย') parts.add(country);
+  return parts.isEmpty ? null : parts.join(', ');
+}
+
 // ข้ามรอบรดน้ำอัตโนมัติทั้งฟาร์มถ้าพยากรณ์บอกว่าฝนจะตกเร็วๆนี้ — เช็คจริง
 // ฝั่ง backend (checkDevices.js, computeRainSkip) ไฟล์นี้แค่เก็บพิกัดฟาร์ม +
 // เปิด/ปิดฟีเจอร์ ไม่ได้ตัดสินใจรดน้ำฝั่ง client เอง
