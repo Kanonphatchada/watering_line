@@ -14,12 +14,14 @@ String faultLabel(String? faultType) => switch (faultType) {
 class StatusChip extends StatelessWidget {
   final bool isAlert;
   final bool isOffline;
+  final bool isDormant;
   final String? faultType;
 
   const StatusChip({
     super.key,
     required this.isAlert,
     this.isOffline = false,
+    this.isDormant = false,
     this.faultType,
   });
 
@@ -27,13 +29,19 @@ class StatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasValveFault = !isOffline && faultType != null;
 
-    // ลำดับความสำคัญ: ขาดการติดต่อ > วาล์วผิดปกติ > ความชื้นเกิน > ปกติ
-    // เพราะค่าที่โชว์อยู่อาจเป็นค่าเก่าที่ค้างมาจากก่อนจะเกิดปัญหา
+    // ลำดับความสำคัญ: ไม่ได้ใช้งาน > ขาดการติดต่อ > วาล์วผิดปกติ > ความชื้นเกิน
+    // > ปกติ เพราะค่าที่โชว์อยู่อาจเป็นค่าเก่าที่ค้างมาจากก่อนจะเกิดปัญหา
     final Color color;
     final IconData icon;
     final String label;
 
-    if (isOffline) {
+    if (isDormant) {
+      // ไม่เคยส่งข้อมูล/เงียบเกิน 7 วัน (เช่น อุปกรณ์ที่สร้างไว้ทดสอบ) — ไม่ใช่
+      // ปัญหา เลยใช้สีจางกว่า "ขาดการติดต่อ"
+      color = Colors.blueGrey.shade400;
+      icon = Icons.bedtime_outlined;
+      label = "ไม่ได้ใช้งาน";
+    } else if (isOffline) {
       color = Colors.grey.shade600;
       icon = Icons.cloud_off;
       label = "ขาดการติดต่อ";
